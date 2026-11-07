@@ -1221,8 +1221,12 @@
 
   // Fabrique une map complète à partir de ses données
   function buildThemeMap(d) {
+    const K = LOOK[d.id] || {};
     const dec = DECOR[d.dec.k] || DECOR.blade;
-    const L = d.logo;
+    const L = Object.assign({}, d.logo, {
+      hero: K.hero ? SPRITES[K.hero] : null,
+      hs: K.hs || 34
+    });
     return {
       id: d.id,
       name: d.name,
@@ -1233,9 +1237,13 @@
       rays: { color: d.ray[0], alpha: d.ray[1] },
       current: { fill: d.cur[0], streak: d.cur[1] },
       obstacles: d.obs,
-      rock: { fill: d.rock.f, edge: d.rock.e, edgeWidth: d.rock.w, detail: d.rock.d, c2: d.rock.c2 },
-      decorCount: d.dec.n,
-      decorH: d.dec.h,
+      rock: {
+        fill: d.rock.f, edge: d.rock.e, edgeWidth: d.rock.w, detail: d.rock.d, c2: d.rock.c2,
+        sprite: K.rock ? SPRITES[K.rock] : null
+      },
+      decorCount: K.n || d.dec.n,
+      decorH: K.h || d.dec.h,
+      decorList: K.dec ? K.dec.map(n => SPRITES[n]) : null,
       drawDecor: (s, sx, sy, now) => dec(s, sx, sy, now, d.dec.c1, d.dec.c2),
       particles: {
         count: d.part.n, color: d.part.c, ring: d.part.ring, dx: d.part.dx, dy: d.part.dy,
@@ -1304,6 +1312,18 @@
     c.fill();
     paintSilhouette(c, L.kind, L.fg2, 62, 0.5, now, 0);
     paintSilhouette(c, L.kind, L.fg, 88, 0.8, now, 1);
+    // objet emblématique de la map (monument, véhicule, personnage du thème)
+    if (L.hero) {
+      const prev = ctx;
+      ctx = c;
+      try {
+        ctx.save();
+        L.hero({ h: L.hs, phase: 1 }, 110, 66, now);
+        ctx.restore();
+      } finally {
+        ctx = prev;
+      }
+    }
     // particules qui montent ou tombent
     c.fillStyle = L.pc;
     for (let i = 0; i < 6; i++) {
@@ -1314,6 +1334,662 @@
       c.fill();
     }
   }
+
+  // ----- Objets dessinés (sprites) : chacun est centré sur (x, y) et sa taille vient de s.h -----
+  // Les outils dessinent sur « ctx », qui pointe vers la carte ou vers le logo de la map
+  function sc(x, y, r, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function sr(x, y, w, h, col) {
+    ctx.fillStyle = col;
+    ctx.fillRect(x, y, w, h);
+  }
+  function sp(pts, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    pts.forEach((p, i) => { if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); });
+    ctx.closePath();
+    ctx.fill();
+  }
+  function sl(pts, col, w) {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    pts.forEach((p, i) => { if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); });
+    ctx.stroke();
+  }
+  function se(x, y, rx, ry, rot, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+
+  // Objets dessinés par thème : monuments, véhicules, personnages, nourriture, livres
+  const SPRITES = {
+    // ----- Monuments, villes et véhicules -----
+    eiffel: (s, x, y) => {
+      const H = s.h * 2.2;
+      sp([[x - H * 0.3, y + H * 0.5], [x - H * 0.04, y - H * 0.5], [x + H * 0.04, y - H * 0.5], [x + H * 0.3, y + H * 0.5]], '#78716c');
+      sl([[x - H * 0.3, y + H * 0.5], [x - H * 0.12, y + H * 0.05], [x + H * 0.12, y + H * 0.05], [x + H * 0.3, y + H * 0.5]], '#44403c', 2);
+      sl([[x - H * 0.2, y + H * 0.22], [x + H * 0.2, y + H * 0.22]], '#d6d3d1', 1.5);
+      sl([[x - H * 0.1, y - H * 0.12], [x + H * 0.1, y - H * 0.12]], '#d6d3d1', 1.5);
+      sr(x - H * 0.02, y - H * 0.62, H * 0.04, H * 0.12, '#44403c');
+    },
+    kremlin: (s, x, y) => {
+      const H = s.h * 1.8;
+      sr(x - H * 0.5, y - H * 0.02, H, H * 0.4, '#b91c1c');
+      for (const tx of [-0.44, -0.06, 0.32]) {
+        const w = H * 0.18, top = y - H * 0.38, left = x + tx * H;
+        sr(left, top, w, H * 0.6, '#b91c1c');
+        sp([[left - H * 0.02, top], [left + w / 2, top - H * 0.22], [left + w + H * 0.02, top]], '#15803d');
+        sc(left + w / 2, top - H * 0.26, H * 0.03, '#fde047');
+      }
+    },
+    bigben: (s, x, y) => {
+      const H = s.h * 1.6;
+      sr(x - H * 0.13, y - H * 0.4, H * 0.26, H * 0.85, '#a16207');
+      sp([[x - H * 0.16, y - H * 0.4], [x, y - H * 0.6], [x + H * 0.16, y - H * 0.4]], '#854d0e');
+      sc(x, y - H * 0.18, H * 0.11, '#fef9c3');
+      sl([[x, y - H * 0.18], [x, y - H * 0.27]], '#422006', 1.5);
+      sl([[x, y - H * 0.18], [x + H * 0.06, y - H * 0.18]], '#422006', 1.5);
+    },
+    liberty: (s, x, y) => {
+      const H = s.h * 1.8;
+      sr(x - H * 0.3, y + H * 0.22, H * 0.6, H * 0.28, '#78716c');
+      sp([[x - H * 0.16, y + H * 0.24], [x - H * 0.1, y - H * 0.18], [x + H * 0.1, y - H * 0.18], [x + H * 0.16, y + H * 0.24]], '#34d399');
+      sc(x, y - H * 0.28, H * 0.08, '#34d399');
+      sl([[x + H * 0.1, y - H * 0.16], [x + H * 0.2, y - H * 0.46]], '#34d399', 3);
+      sc(x + H * 0.2, y - H * 0.5, H * 0.05, '#fde047');
+    },
+    tokyotower: (s, x, y) => {
+      const H = s.h * 2;
+      sp([[x - H * 0.3, y + H * 0.5], [x, y - H * 0.5], [x + H * 0.3, y + H * 0.5]], '#ea580c');
+      sl([[x - H * 0.18, y + H * 0.15], [x + H * 0.18, y + H * 0.15]], '#ffffff', 3);
+      sl([[x - H * 0.1, y - H * 0.15], [x + H * 0.1, y - H * 0.15]], '#ffffff', 3);
+      sl([[x, y - H * 0.5], [x, y - H * 0.62]], '#9ca3af', 2);
+    },
+    pyramid: (s, x, y) => {
+      const H = s.h * 1.6;
+      sp([[x - H * 0.5, y + H * 0.4], [x, y - H * 0.4], [x + H * 0.5, y + H * 0.4]], '#eab308');
+      sp([[x, y - H * 0.4], [x + H * 0.5, y + H * 0.4], [x, y + H * 0.4]], '#a16207');
+    },
+    basil: (s, x, y) => {
+      const H = s.h * 1.6;
+      sr(x - H * 0.4, y + H * 0.02, H * 0.8, H * 0.42, '#f5f5f4');
+      sc(x - H * 0.25, y - H * 0.08, H * 0.14, '#16a34a');
+      sc(x, y - H * 0.18, H * 0.19, '#dc2626');
+      sc(x + H * 0.25, y - H * 0.08, H * 0.14, '#2563eb');
+      sl([[x, y - H * 0.36], [x, y - H * 0.48]], '#ca8a04', 2);
+    },
+    christ: (s, x, y) => {
+      const H = s.h * 1.8;
+      sr(x - H * 0.04, y - H * 0.36, H * 0.08, H * 0.7, '#f5f5f4');
+      sr(x - H * 0.32, y - H * 0.3, H * 0.64, H * 0.08, '#f5f5f4');
+      sc(x, y - H * 0.42, H * 0.06, '#f5f5f4');
+      sr(x - H * 0.12, y + H * 0.34, H * 0.24, H * 0.1, '#78716c');
+    },
+    rialto: (s, x, y) => {
+      const H = s.h * 1.8;
+      sr(x - H * 0.5, y, H, H * 0.42, '#0ea5e9');
+      ctx.fillStyle = '#d6d3d1';
+      ctx.beginPath();
+      ctx.moveTo(x - H * 0.4, y + H * 0.2);
+      ctx.arc(x, y + H * 0.2, H * 0.4, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+    },
+    gondola: (s, x, y) => {
+      const H = s.h * 1.2;
+      se(x, y, H * 0.5, H * 0.16, 0, '#111827');
+      se(x + H * 0.42, y, H * 0.1, H * 0.1, 0, '#1f2937');
+      sl([[x - H * 0.3, y], [x + H * 0.3, y]], '#f59e0b', 1.5);
+    },
+    skyscraper: (s, x, y) => {
+      const H = s.h * 1.3;
+      sr(x - H * 0.4, y - H * 0.4, H * 0.8, H * 0.8, '#64748b');
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) sr(x - H * 0.3 + i * H * 0.23, y - H * 0.3 + j * H * 0.23, H * 0.1, H * 0.1, '#cbd5e1');
+      }
+    },
+    minaret: (s, x, y) => {
+      const H = s.h * 2;
+      sr(x - H * 0.1, y - H * 0.38, H * 0.2, H * 0.84, '#f5f5f4');
+      sc(x, y - H * 0.42, H * 0.12, '#16a34a');
+      sr(x - H * 0.14, y + H * 0.05, H * 0.28, H * 0.05, '#d6d3d1');
+    },
+    car: (s, x, y) => {
+      const H = s.h;
+      const col = ['#dc2626', '#2563eb', '#f5f5f4', '#374151', '#16a34a'][Math.floor(s.phase) % 5];
+      sr(x - H * 0.5, y - H * 0.25, H, H * 0.5, col);
+      sr(x - H * 0.2, y - H * 0.18, H * 0.4, H * 0.36, '#bae6fd');
+    },
+    taxi: (s, x, y) => {
+      const H = s.h;
+      sr(x - H * 0.5, y - H * 0.25, H, H * 0.5, '#facc15');
+      sr(x - H * 0.2, y - H * 0.18, H * 0.4, H * 0.36, '#bae6fd');
+      sr(x - H * 0.07, y - H * 0.34, H * 0.14, H * 0.08, '#fef9c3');
+    },
+    bus: (s, x, y) => {
+      const H = s.h * 1.4;
+      sr(x - H * 0.5, y - H * 0.18, H, H * 0.36, '#dc2626');
+      for (let i = 0; i < 4; i++) sr(x - H * 0.42 + i * H * 0.22, y - H * 0.1, H * 0.16, H * 0.2, '#bae6fd');
+    },
+    phonebox: (s, x, y) => {
+      const H = s.h;
+      sr(x - H * 0.25, y - H * 0.25, H * 0.5, H * 0.5, '#b91c1c');
+      sr(x - H * 0.15, y - H * 0.15, H * 0.3, H * 0.3, '#fef2f2');
+    },
+    // ----- Espace -----
+    planet: (s, x, y) => {
+      const H = s.h * 1.4;
+      sc(x, y, H * 0.3, '#f97316');
+      ctx.strokeStyle = '#fde68a';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(x, y, H * 0.5, H * 0.14, -0.3, 0, Math.PI * 2);
+      ctx.stroke();
+    },
+    moon: (s, x, y) => {
+      const H = s.h * 1.2;
+      sc(x, y, H * 0.4, '#cbd5e1');
+      sc(x - H * 0.12, y - H * 0.08, H * 0.09, '#94a3b8');
+      sc(x + H * 0.14, y + H * 0.1, H * 0.06, '#94a3b8');
+      sc(x + H * 0.02, y + H * 0.2, H * 0.05, '#94a3b8');
+    },
+    rocket: (s, x, y) => {
+      const H = s.h * 1.4;
+      sr(x - H * 0.1, y - H * 0.4, H * 0.2, H * 0.7, '#e5e7eb');
+      sp([[x - H * 0.1, y - H * 0.4], [x, y - H * 0.6], [x + H * 0.1, y - H * 0.4]], '#ef4444');
+      sp([[x - H * 0.1, y + H * 0.1], [x - H * 0.22, y + H * 0.3], [x - H * 0.1, y + H * 0.3]], '#ef4444');
+      sp([[x + H * 0.1, y + H * 0.1], [x + H * 0.22, y + H * 0.3], [x + H * 0.1, y + H * 0.3]], '#ef4444');
+      sc(x, y - H * 0.18, H * 0.05, '#38bdf8');
+      sp([[x - H * 0.05, y + H * 0.3], [x, y + H * 0.45], [x + H * 0.05, y + H * 0.3]], '#fb923c');
+    },
+    ufo: (s, x, y) => {
+      const H = s.h * 1.4;
+      se(x, y, H * 0.5, H * 0.15, 0, '#9ca3af');
+      ctx.fillStyle = '#a5f3fc';
+      ctx.beginPath();
+      ctx.arc(x, y - H * 0.02, H * 0.2, Math.PI, 0);
+      ctx.fill();
+      for (let i = -1; i <= 1; i++) sc(x + i * H * 0.25, y, H * 0.04, '#fde047');
+    },
+    alien: (s, x, y) => {
+      const H = s.h * 1.2;
+      se(x, y, H * 0.3, H * 0.4, 0, '#84cc16');
+      se(x - H * 0.12, y - H * 0.05, H * 0.08, H * 0.12, 0, '#111827');
+      se(x + H * 0.12, y - H * 0.05, H * 0.08, H * 0.12, 0, '#111827');
+    },
+    asteroid: (s, x, y) => {
+      const H = s.h * 1.2, pts = [];
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI * 2) / 8, r = H * (0.32 + ((i * 7) % 3) * 0.05);
+        pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r]);
+      }
+      sp(pts, '#78716c');
+      sc(x - H * 0.1, y - H * 0.08, H * 0.06, '#57534e');
+    },
+    sparkle: (s, x, y, now) => decStar(s, x, y, now, '#fef9c3'),
+    // ----- Objets de base réutilisés -----
+    palm: (s, x, y, now) => decPalm(s, x, y, now, '#15803d'),
+    flower: (s, x, y, now) => decFlower(s, x, y, now, '#fda4af', '#fff1f2'),
+    mushroom: (s, x, y, now) => decMush(s, x, y, now, '#dc2626', '#fef08a'),
+    reed: (s, x, y, now) => {
+      decBlade(s, x, y, now, '#65a30d');
+      sc(x, y - s.h, 2.5, '#92400e');
+    },
+    candy: (s, x, y, now) => decSwirl(s, x, y, now, '#f472b6', '#ffffff'),
+    dune: (s, x, y) => {
+      const H = s.h * 1.6;
+      se(x, y, H * 0.5, H * 0.22, 0, '#fde68a');
+      se(x + H * 0.08, y + H * 0.06, H * 0.36, H * 0.12, 0, '#fcd34d');
+    },
+    camel: (s, x, y) => {
+      const H = s.h * 1.4;
+      se(x, y, H * 0.4, H * 0.18, 0, '#d97706');
+      sc(x - H * 0.1, y - H * 0.2, H * 0.14, '#d97706');
+      sl([[x - H * 0.25, y + H * 0.15], [x - H * 0.25, y + H * 0.4]], '#b45309', 3);
+      sl([[x + H * 0.25, y + H * 0.15], [x + H * 0.25, y + H * 0.4]], '#b45309', 3);
+    },
+    // ----- Nature et animaux -----
+    tree: (s, x, y) => {
+      const H = s.h * 1.2;
+      sr(x - H * 0.05, y, H * 0.1, H * 0.4, '#78350f');
+      sc(x, y - H * 0.1, H * 0.4, '#15803d');
+      sc(x - H * 0.1, y - H * 0.2, H * 0.15, '#22c55e');
+    },
+    blossomtree: (s, x, y) => {
+      const H = s.h * 1.2;
+      sr(x - H * 0.05, y, H * 0.1, H * 0.4, '#78350f');
+      sc(x, y - H * 0.1, H * 0.4, '#f9a8d4');
+      sc(x - H * 0.1, y - H * 0.2, H * 0.15, '#fbcfe8');
+      sc(x + H * 0.14, y - H * 0.02, H * 0.08, '#fff1f2');
+    },
+    pine: (s, x, y) => {
+      const H = s.h * 1.6;
+      sp([[x - H * 0.4, y + H * 0.2], [x, y - H * 0.5], [x + H * 0.4, y + H * 0.2]], '#14532d');
+      sp([[x - H * 0.3, y - H * 0.05], [x, y - H * 0.5], [x + H * 0.3, y - H * 0.05]], '#166534');
+      sr(x - H * 0.04, y + H * 0.2, H * 0.08, H * 0.2, '#78350f');
+    },
+    acacia: (s, x, y) => {
+      const H = s.h * 1.3;
+      sr(x - H * 0.03, y - H * 0.1, H * 0.06, H * 0.5, '#78350f');
+      se(x, y - H * 0.25, H * 0.5, H * 0.14, 0, '#65a30d');
+    },
+    baobab: (s, x, y) => {
+      const H = s.h * 1.4;
+      sc(x, y + H * 0.05, H * 0.2, '#92400e');
+      se(x, y - H * 0.18, H * 0.45, H * 0.28, 0, '#4d7c0f');
+    },
+    bush: (s, x, y) => {
+      const H = s.h;
+      sc(x - H * 0.2, y, H * 0.22, '#4d7c0f');
+      sc(x + H * 0.18, y + H * 0.05, H * 0.2, '#3f6212');
+      sc(x, y - H * 0.12, H * 0.22, '#65a30d');
+    },
+    bamboo: (s, x, y) => {
+      const H = s.h * 1.6;
+      for (const dx of [-0.14, 0, 0.14]) {
+        sr(x + dx * H - H * 0.03, y - H * 0.5, H * 0.06, H, '#4d7c0f');
+        sr(x + dx * H - H * 0.04, y - H * 0.1, H * 0.08, H * 0.03, '#a3e635');
+      }
+      sp([[x, y - H * 0.4], [x + H * 0.2, y - H * 0.5], [x + H * 0.02, y - H * 0.3]], '#22c55e');
+    },
+    lily: (s, x, y) => {
+      const H = s.h;
+      sc(x, y, H * 0.42, '#16a34a');
+      sp([[x, y], [x + H * 0.42, y - H * 0.1], [x + H * 0.42, y + H * 0.1]], '#0e7490');
+      sc(x - H * 0.1, y - H * 0.15, H * 0.1, '#f9a8d4');
+    },
+    coral: (s, x, y) => {
+      const H = s.h * 1.3;
+      sl([[x, y + H * 0.4], [x, y - H * 0.1]], '#fb7185', 4);
+      sl([[x, y], [x - H * 0.3, y - H * 0.25]], '#fb7185', 3);
+      sl([[x, y], [x + H * 0.3, y - H * 0.3]], '#f43f5e', 3);
+      sl([[x - H * 0.3, y - H * 0.25], [x - H * 0.35, y - H * 0.5]], '#fb7185', 2);
+      sl([[x + H * 0.3, y - H * 0.3], [x + H * 0.4, y - H * 0.55]], '#f43f5e', 2);
+    },
+    fish: (s, x, y) => {
+      const H = s.h * 1.2;
+      se(x, y, H * 0.3, H * 0.17, 0, '#f59e0b');
+      sp([[x + H * 0.25, y], [x + H * 0.45, y - H * 0.15], [x + H * 0.45, y + H * 0.15]], '#f59e0b');
+      sc(x - H * 0.14, y - H * 0.04, H * 0.04, '#111827');
+    },
+    starfish: (s, x, y) => {
+      const H = s.h * 1.2, pts = [];
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI * 2) / 10, r = i % 2 ? H * 0.18 : H * 0.42;
+        pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r]);
+      }
+      sp(pts, '#f97316');
+    },
+    shell: (s, x, y) => {
+      const H = s.h;
+      sc(x, y, H * 0.4, '#fde68a');
+      sl([[x, y], [x + H * 0.15, y], [x + H * 0.15, y + H * 0.15], [x - H * 0.15, y + H * 0.15], [x - H * 0.15, y - H * 0.15], [x + H * 0.25, y - H * 0.15]], '#d97706', 1.5);
+    },
+    snowflake: (s, x, y, now) => {
+      const H = s.h * 1.2, rot = now / 2000 + s.phase;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      for (let k = 0; k < 6; k++) {
+        const a = rot + (k * Math.PI) / 3;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(a) * H * 0.4, y + Math.sin(a) * H * 0.4);
+        ctx.stroke();
+      }
+    },
+    penguin: (s, x, y) => {
+      const H = s.h * 1.2;
+      se(x, y, H * 0.26, H * 0.36, 0, '#111827');
+      se(x, y + H * 0.04, H * 0.14, H * 0.26, 0, '#f8fafc');
+      sp([[x - H * 0.05, y - H * 0.1], [x + H * 0.05, y - H * 0.1], [x, y - H * 0.02]], '#f97316');
+    },
+    igloo: (s, x, y) => {
+      const H = s.h * 1.2;
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.moveTo(x - H * 0.4, y + H * 0.2);
+      ctx.arc(x, y + H * 0.2, H * 0.4, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      sr(x - H * 0.08, y + H * 0.05, H * 0.16, H * 0.15, '#1e3a8a');
+    },
+    cloud: (s, x, y) => {
+      const H = s.h * 1.4;
+      sc(x - H * 0.2, y, H * 0.2, '#ffffff');
+      sc(x + H * 0.05, y - H * 0.08, H * 0.26, '#ffffff');
+      sc(x + H * 0.3, y + H * 0.04, H * 0.18, '#ffffff');
+      sr(x - H * 0.2, y, H * 0.5, H * 0.18, '#ffffff');
+    },
+    bird: (s, x, y, now) => {
+      const H = s.h, flap = Math.sin(now / 200 + s.phase) * H * 0.2;
+      sl([[x - H * 0.3, y - H * 0.1 + flap], [x, y], [x + H * 0.3, y - H * 0.1 + flap]], '#1f2937', 2);
+    },
+    balloon: (s, x, y) => {
+      const H = s.h * 1.4;
+      sc(x, y - H * 0.12, H * 0.28, '#f43f5e');
+      sr(x - H * 0.06, y + H * 0.14, H * 0.12, H * 0.12, '#78350f');
+      sl([[x - H * 0.06, y + H * 0.14], [x - H * 0.14, y - H * 0.1]], '#78350f', 1);
+      sl([[x + H * 0.06, y + H * 0.14], [x + H * 0.14, y - H * 0.1]], '#78350f', 1);
+    },
+    petal: (s, x, y, now) => {
+      ctx.fillStyle = '#fbcfe8';
+      ctx.beginPath();
+      ctx.ellipse(x, y, s.h * 0.5, s.h * 0.25, now / 800 + s.phase, 0, Math.PI * 2);
+      ctx.fill();
+    },
+    leaf: (s, x, y, now) => {
+      ctx.fillStyle = '#ea580c';
+      ctx.beginPath();
+      ctx.ellipse(x, y, s.h * 0.5, s.h * 0.25, now / 900 + s.phase, 0, Math.PI * 2);
+      ctx.fill();
+    },
+    owl: (s, x, y) => {
+      const H = s.h * 1.2;
+      sp([[x - H * 0.3, y - H * 0.25], [x - H * 0.22, y - H * 0.5], [x - H * 0.08, y - H * 0.3]], '#78350f');
+      sp([[x + H * 0.3, y - H * 0.25], [x + H * 0.22, y - H * 0.5], [x + H * 0.08, y - H * 0.3]], '#78350f');
+      se(x, y, H * 0.36, H * 0.4, 0, '#92400e');
+      sc(x - H * 0.14, y - H * 0.08, H * 0.13, '#fef3c7');
+      sc(x + H * 0.14, y - H * 0.08, H * 0.13, '#fef3c7');
+      sc(x - H * 0.14, y - H * 0.08, H * 0.05, '#111827');
+      sc(x + H * 0.14, y - H * 0.08, H * 0.05, '#111827');
+      sp([[x - H * 0.04, y + H * 0.02], [x + H * 0.04, y + H * 0.02], [x, y + H * 0.1]], '#f59e0b');
+    },
+    glowshroom: (s, x, y) => {
+      const H = s.h * 1.2;
+      sc(x, y, H * 0.5, 'rgba(103, 232, 249, 0.25)');
+      sr(x - H * 0.06, y, H * 0.12, H * 0.3, '#cffafe');
+      ctx.fillStyle = '#67e8f9';
+      ctx.beginPath();
+      ctx.arc(x, y, H * 0.22, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+    },
+    stalag: (s, x, y) => {
+      const H = s.h * 1.3;
+      sp([[x - H * 0.25, y + H * 0.4], [x, y - H * 0.4], [x + H * 0.25, y + H * 0.4]], '#6366f1');
+      sp([[x, y - H * 0.4], [x + H * 0.25, y + H * 0.4], [x, y + H * 0.4]], '#4338ca');
+    },
+    bat: (s, x, y, now) => {
+      const H = s.h, f = Math.sin(now / 150 + s.phase) * H * 0.15;
+      sp([[x, y], [x - H * 0.4, y - H * 0.15 + f], [x - H * 0.2, y + H * 0.05], [x, y + H * 0.02]], '#312e81');
+      sp([[x, y], [x + H * 0.4, y - H * 0.15 + f], [x + H * 0.2, y + H * 0.05], [x, y + H * 0.02]], '#312e81');
+    },
+    // ----- Nourriture -----
+    lollipop: (s, x, y) => {
+      const H = s.h * 1.2;
+      sr(x - H * 0.03, y, H * 0.06, H * 0.45, '#fef3c7');
+      sc(x, y - H * 0.12, H * 0.3, '#f0abfc');
+      sl([[x - H * 0.2, y - H * 0.12], [x + H * 0.2, y - H * 0.12]], '#ffffff', 2);
+    },
+    choco: (s, x, y) => {
+      const H = s.h * 1.4;
+      sr(x - H * 0.36, y - H * 0.2, H * 0.72, H * 0.4, '#78350f');
+      for (let i = 1; i < 4; i++) sl([[x - H * 0.36 + i * H * 0.18, y - H * 0.2], [x - H * 0.36 + i * H * 0.18, y + H * 0.2]], '#451a03', 1.5);
+      sl([[x - H * 0.36, y], [x + H * 0.36, y]], '#451a03', 1.5);
+    },
+    cookie: (s, x, y) => {
+      const H = s.h;
+      sc(x, y, H * 0.42, '#d97706');
+      for (const [dx, dy] of [[-0.18, -0.1], [0.12, -0.2], [0.2, 0.12], [-0.08, 0.18], [0.02, -0.02]]) sc(x + dx * H, y + dy * H, H * 0.07, '#451a03');
+    },
+    cupcake: (s, x, y) => {
+      const H = s.h;
+      sp([[x - H * 0.3, y + H * 0.1], [x + H * 0.3, y + H * 0.1], [x + H * 0.22, y + H * 0.42], [x - H * 0.22, y + H * 0.42]], '#f59e0b');
+      sc(x, y - H * 0.08, H * 0.3, '#fbcfe8');
+      sc(x, y - H * 0.18, H * 0.1, '#f9a8d4');
+      sc(x + H * 0.02, y - H * 0.26, H * 0.06, '#dc2626');
+    },
+    strawberry: (s, x, y) => {
+      const H = s.h;
+      sc(x - H * 0.14, y - H * 0.1, H * 0.22, '#dc2626');
+      sc(x + H * 0.14, y - H * 0.1, H * 0.22, '#dc2626');
+      sp([[x - H * 0.36, y - H * 0.1], [x + H * 0.36, y - H * 0.1], [x, y + H * 0.42]], '#dc2626');
+      for (const [dx, dy] of [[-0.14, -0.05], [0.14, -0.05], [0, 0.12], [-0.08, 0.2], [0.1, 0.2]]) sc(x + dx * H, y + dy * H, H * 0.02, '#fde047');
+      sp([[x - H * 0.2, y - H * 0.12], [x + H * 0.2, y - H * 0.12], [x, y - H * 0.28]], '#15803d');
+    },
+    macaron: (s, x, y) => {
+      const H = s.h;
+      sc(x, y, H * 0.42, '#f9a8d4');
+      sc(x, y, H * 0.28, '#fbcfe8');
+      sl([[x - H * 0.3, y], [x + H * 0.3, y]], '#fdf2f8', 2);
+    },
+    pizza: (s, x, y) => {
+      const H = s.h * 1.2;
+      sp([[x - H * 0.42, y - H * 0.2], [x + H * 0.42, y - H * 0.2], [x, y + H * 0.42]], '#fbbf24');
+      sl([[x - H * 0.42, y - H * 0.2], [x + H * 0.42, y - H * 0.2]], '#b45309', 4);
+      sc(x - H * 0.14, y - H * 0.05, H * 0.08, '#dc2626');
+      sc(x + H * 0.12, y + H * 0.02, H * 0.08, '#dc2626');
+      sc(x, y + H * 0.2, H * 0.07, '#dc2626');
+    },
+    cheese: (s, x, y) => {
+      const H = s.h;
+      sp([[x - H * 0.4, y + H * 0.2], [x + H * 0.4, y + H * 0.2], [x - H * 0.1, y - H * 0.35]], '#fde047');
+      sc(x, y + H * 0.02, H * 0.06, '#eab308');
+      sc(x - H * 0.18, y + H * 0.1, H * 0.05, '#eab308');
+      sc(x + H * 0.18, y + H * 0.1, H * 0.05, '#eab308');
+    },
+    sushi: (s, x, y) => {
+      const H = s.h;
+      sc(x, y, H * 0.42, '#14532d');
+      sc(x, y, H * 0.3, '#f8fafc');
+      sc(x, y, H * 0.12, '#fb7185');
+    },
+    lemon: (s, x, y) => {
+      const H = s.h;
+      sc(x, y, H * 0.42, '#facc15');
+      sc(x, y, H * 0.35, '#fef9c3');
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        sl([[x, y], [x + Math.cos(a) * H * 0.33, y + Math.sin(a) * H * 0.33]], '#facc15', 2);
+      }
+    },
+    grapes: (s, x, y) => {
+      const H = s.h;
+      for (const [dx, dy] of [[-0.2, -0.3], [0.2, -0.3], [0, -0.1], [-0.2, 0.1], [0.2, 0.1], [0, 0.3]]) sc(x + dx * H, y + dy * H, H * 0.13, '#7e22ce');
+      sc(x - H * 0.05, y - H * 0.4, H * 0.05, '#65a30d');
+    },
+    coffee: (s, x, y) => {
+      const H = s.h;
+      sc(x, y, H * 0.45, '#e7e5e4');
+      sc(x, y, H * 0.32, '#fafaf9');
+      sc(x, y, H * 0.24, '#78350f');
+      sc(x - H * 0.06, y - H * 0.06, H * 0.06, '#a16207');
+    },
+    donut: (s, x, y) => {
+      const H = s.h;
+      sc(x, y, H * 0.42, '#f9a8d4');
+      sc(x, y, H * 0.14, '#0c4a6e');
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.047 + 0.3;
+        sc(x + Math.cos(a) * H * 0.28, y + Math.sin(a) * H * 0.28, H * 0.03, ['#facc15', '#22d3ee', '#ffffff'][i % 3]);
+      }
+    },
+    cherry: (s, x, y) => {
+      const H = s.h * 0.8;
+      sc(x - H * 0.15, y + H * 0.1, H * 0.2, '#be123c');
+      sc(x + H * 0.15, y + H * 0.1, H * 0.2, '#be123c');
+      sl([[x - H * 0.15, y + H * 0.1], [x, y - H * 0.3], [x + H * 0.15, y + H * 0.1]], '#15803d', 2);
+    },
+    // ----- Livres, personnages et culture -----
+    book: (s, x, y) => {
+      const H = s.h * 1.3;
+      sr(x - H * 0.3, y - H * 0.42, H * 0.6, H * 0.84, '#1d4ed8');
+      sr(x + H * 0.22, y - H * 0.4, H * 0.08, H * 0.8, '#f5f5f4');
+      sr(x - H * 0.3, y - H * 0.42, H * 0.08, H * 0.84, '#1e3a8a');
+      sr(x - H * 0.12, y - H * 0.2, H * 0.28, H * 0.05, '#fde047');
+    },
+    bookstack: (s, x, y) => {
+      const H = s.h * 1.2;
+      sr(x - H * 0.4, y + H * 0.15, H * 0.8, H * 0.15, '#dc2626');
+      sr(x - H * 0.36, y - H * 0.02, H * 0.7, H * 0.16, '#16a34a');
+      sr(x - H * 0.3, y - H * 0.2, H * 0.6, H * 0.16, '#fde047');
+      sr(x - H * 0.25, y - H * 0.36, H * 0.5, H * 0.14, '#2563eb');
+    },
+    openbook: (s, x, y) => {
+      const H = s.h * 1.4;
+      sp([[x, y - H * 0.25], [x - H * 0.5, y - H * 0.35], [x - H * 0.5, y + H * 0.3], [x, y + H * 0.2]], '#fafaf9');
+      sp([[x, y - H * 0.25], [x + H * 0.5, y - H * 0.35], [x + H * 0.5, y + H * 0.3], [x, y + H * 0.2]], '#f5f5f4');
+      sl([[x, y - H * 0.25], [x, y + H * 0.2]], '#78716c', 1.5);
+      for (let i = 0; i < 3; i++) {
+        sl([[x - H * 0.4, y - H * 0.1 + i * H * 0.12], [x - H * 0.1, y - H * 0.13 + i * H * 0.12]], '#a8a29e', 1);
+        sl([[x + H * 0.1, y - H * 0.13 + i * H * 0.12], [x + H * 0.4, y - H * 0.1 + i * H * 0.12]], '#a8a29e', 1);
+      }
+    },
+    scroll: (s, x, y) => {
+      const H = s.h * 1.2;
+      sr(x - H * 0.36, y - H * 0.25, H * 0.72, H * 0.5, '#fef3c7');
+      sc(x - H * 0.36, y, H * 0.1, '#a16207');
+      sc(x + H * 0.36, y, H * 0.1, '#a16207');
+      for (let i = 0; i < 3; i++) sl([[x - H * 0.25, y - H * 0.12 + i * H * 0.12], [x + H * 0.25, y - H * 0.12 + i * H * 0.12]], '#92400e', 1);
+    },
+    quill: (s, x, y) => {
+      const H = s.h * 1.2;
+      se(x + H * 0.1, y - H * 0.1, H * 0.12, H * 0.38, 0.5, '#f5f5f4');
+      sl([[x - H * 0.3, y + H * 0.35], [x + H * 0.02, y - H * 0.25]], '#1f2937', 2);
+      sc(x - H * 0.31, y + H * 0.36, H * 0.04, '#1f2937');
+    },
+    speech: (s, x, y) => {
+      const H = s.h * 1.2;
+      sc(x, y - H * 0.08, H * 0.36, '#ffffff');
+      sp([[x - H * 0.12, y + H * 0.2], [x + H * 0.02, y + H * 0.22], [x - H * 0.12, y + H * 0.36]], '#ffffff');
+      for (let i = -1; i <= 1; i++) sc(x + i * H * 0.14, y - H * 0.08, H * 0.04, '#111827');
+    },
+    wizardhat: (s, x, y) => {
+      const H = s.h * 1.2;
+      sp([[x - H * 0.36, y + H * 0.3], [x + H * 0.02, y - H * 0.45], [x + H * 0.36, y + H * 0.3]], '#4c1d95');
+      se(x, y + H * 0.3, H * 0.4, H * 0.1, 0, '#312e81');
+      sc(x + H * 0.02, y - H * 0.42, H * 0.06, '#fde047');
+    },
+    crown: (s, x, y) => {
+      const H = s.h * 1.2;
+      sp([[x - H * 0.38, y + H * 0.25], [x - H * 0.38, y - H * 0.15], [x - H * 0.19, y + H * 0.02], [x, y - H * 0.25], [x + H * 0.19, y + H * 0.02], [x + H * 0.38, y - H * 0.15], [x + H * 0.38, y + H * 0.25]], '#facc15');
+      sc(x, y - H * 0.25, H * 0.05, '#dc2626');
+      sc(x - H * 0.38, y - H * 0.15, H * 0.04, '#dc2626');
+      sc(x + H * 0.38, y - H * 0.15, H * 0.04, '#dc2626');
+    },
+    bigtop: (s, x, y) => {
+      const H = s.h * 1.5, r = H * 0.42;
+      for (let i = 0; i < 8; i++) {
+        ctx.fillStyle = i % 2 ? '#fef2f2' : '#dc2626';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.arc(x, y, r, (i * Math.PI) / 4, ((i + 1) * Math.PI) / 4);
+        ctx.closePath();
+        ctx.fill();
+      }
+      sc(x, y, H * 0.06, '#fde047');
+    },
+    confetti: (s, x, y) => {
+      const H = s.h, cols = ['#f43f5e', '#facc15', '#22d3ee', '#a855f7', '#22c55e'];
+      for (let i = 0; i < 6; i++) {
+        const dx = Math.cos(s.phase * 3 + i * 2.1) * H * 0.4, dy = Math.sin(s.phase * 5 + i * 1.7) * H * 0.4;
+        ctx.save();
+        ctx.translate(x + dx, y + dy);
+        ctx.rotate(i + s.phase);
+        sr(-H * 0.05, -H * 0.02, H * 0.1, H * 0.04, cols[i % 5]);
+        ctx.restore();
+      }
+    },
+    note: (s, x, y) => {
+      const H = s.h * 1.2;
+      sc(x - H * 0.12, y + H * 0.22, H * 0.14, '#111827');
+      sr(x - H * 0.01, y - H * 0.3, H * 0.05, H * 0.52, '#111827');
+      sp([[x + H * 0.04, y - H * 0.3], [x + H * 0.2, y - H * 0.18], [x + H * 0.04, y - H * 0.08]], '#111827');
+    },
+    mask: (s, x, y) => {
+      const H = s.h * 1.3;
+      se(x - H * 0.2, y, H * 0.2, H * 0.13, 0, '#7c3aed');
+      se(x + H * 0.2, y, H * 0.2, H * 0.13, 0, '#7c3aed');
+      sl([[x - H * 0.4, y], [x - H * 0.02, y - H * 0.02]], '#facc15', 2);
+      sl([[x + H * 0.02, y - H * 0.02], [x + H * 0.4, y]], '#facc15', 2);
+      sc(x - H * 0.2, y, H * 0.05, '#111827');
+      sc(x + H * 0.2, y, H * 0.05, '#111827');
+    },
+    reel: (s, x, y) => {
+      const H = s.h * 1.2;
+      sc(x, y, H * 0.42, '#1f2937');
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        sc(x + Math.cos(a) * H * 0.26, y + Math.sin(a) * H * 0.26, H * 0.07, '#e5e7eb');
+      }
+      sc(x, y, H * 0.09, '#fbbf24');
+    },
+    invader: (s, x, y) => {
+      const H = s.h, px = H * 0.14;
+      const pat = [[0, 1, 0, 1, 0], [0, 0, 1, 0, 0], [0, 1, 1, 1, 0], [1, 0, 1, 0, 1], [1, 1, 1, 1, 1]];
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 5; c++) {
+          if (pat[r][c]) sr(x - 2.5 * px + c * px, y - 2.5 * px + r * px, px * 0.9, px * 0.9, '#22d3ee');
+        }
+      }
+    },
+    joystick: (s, x, y) => {
+      const H = s.h * 1.2;
+      sr(x - H * 0.4, y + H * 0.18, H * 0.8, H * 0.2, '#374151');
+      sl([[x, y + H * 0.2], [x, y - H * 0.1]], '#9ca3af', 3);
+      sc(x, y - H * 0.16, H * 0.14, '#dc2626');
+    },
+  };
+
+  // Ce qui apparaît dans chaque map : décor (dec), taille du décor (h), nombre (n),
+  // objet emblématique du logo (hero, taille hs) et objet posé sur les rochers (rock)
+  const LOOK = {
+    jungle: { dec: ['palm', 'bush', 'palm', 'bird'], h: [28, 44], n: 50, hero: 'palm', rock: 'tree' },
+    marecage: { dec: ['reed', 'lily', 'reed', 'bush'], h: [16, 28], n: 70, hero: 'reed', rock: 'bush' },
+    savane: { dec: ['acacia', 'baobab', 'bush', 'camel'], h: [22, 34], n: 40, hero: 'camel', rock: 'baobab' },
+    toundra: { dec: ['pine', 'snowflake', 'penguin', 'igloo'], h: [14, 26], n: 50, hero: 'pine', rock: 'igloo' },
+    montagne: { dec: ['pine', 'pine', 'bird', 'cloud'], h: [16, 28], n: 50, hero: 'pine', rock: 'pine' },
+    ciel: { dec: ['cloud', 'bird', 'balloon', 'cloud'], h: [18, 30], n: 35, hero: 'balloon', rock: 'cloud' },
+    caverne: { dec: ['stalag', 'glowshroom', 'bat', 'stalag'], h: [14, 26], n: 55, hero: 'glowshroom', rock: 'stalag' },
+    corail: { dec: ['coral', 'fish', 'starfish', 'coral'], h: [12, 24], n: 60, hero: 'coral', rock: 'starfish' },
+    delta: { dec: ['grass', 'reed', 'grass', 'bush'], h: [18, 30], n: 70, hero: 'tree', rock: 'lily' },
+    bambou: { dec: ['bamboo', 'bamboo', 'bush', 'bamboo'], h: [30, 48], n: 60, hero: 'bamboo', rock: 'bush' },
+    cerisiers: { dec: ['blossomtree', 'petal', 'blossomtree', 'petal'], h: [16, 26], n: 60, hero: 'blossomtree', rock: 'flower' },
+    automne: { dec: ['tree', 'leaf', 'bush', 'leaf'], h: [18, 30], n: 60, hero: 'tree', rock: 'bush' },
+    printemps: { dec: ['flower', 'blossomtree', 'flower', 'petal'], h: [14, 24], n: 70, hero: 'flower', hs: 44, rock: 'lily' },
+    nuit: { dec: ['moon', 'sparkle', 'sparkle', 'owl'], h: [10, 22], n: 45, hero: 'moon', rock: 'owl' },
+    espace: { dec: ['planet', 'asteroid', 'ufo', 'sparkle'], h: [14, 26], n: 40, hero: 'planet', rock: 'asteroid' },
+    mars: { dec: ['asteroid', 'asteroid', 'alien', 'rocket'], h: [14, 24], n: 40, hero: 'rocket', rock: 'asteroid' },
+    aurore: { dec: ['pine', 'sparkle', 'pine', 'snowflake'], h: [16, 26], n: 40, hero: 'penguin', rock: 'snowflake' },
+    bonbons: { dec: ['lollipop', 'candy', 'lollipop', 'candy'], h: [12, 22], n: 70, hero: 'lollipop', rock: 'candy' },
+    chocolat: { dec: ['choco', 'choco', 'cookie', 'choco'], h: [12, 20], n: 55, hero: 'choco', rock: 'cookie' },
+    fraise: { dec: ['strawberry', 'cherry', 'strawberry', 'leaf'], h: [12, 20], n: 60, hero: 'strawberry', hs: 46, rock: 'cupcake' },
+    pizza: { dec: ['pizza', 'cheese', 'pizza', 'cherry'], h: [12, 22], n: 60, hero: 'pizza', rock: 'cheese' },
+    sushi: { dec: ['sushi', 'fish', 'sushi', 'shell'], h: [10, 20], n: 60, hero: 'fish', rock: 'sushi' },
+    citron: { dec: ['lemon', 'lemon', 'leaf', 'bush'], h: [12, 20], n: 60, hero: 'lemon', hs: 60, rock: 'bush' },
+    raisin: { dec: ['grapes', 'leaf', 'grapes', 'grapes'], h: [14, 24], n: 60, hero: 'grapes', hs: 50, rock: 'grapes' },
+    cafe: { dec: ['coffee', 'cupcake', 'coffee', 'cookie'], h: [14, 24], n: 50, hero: 'coffee', hs: 56, rock: 'donut' },
+    patisserie: { dec: ['macaron', 'cupcake', 'donut', 'macaron'], h: [12, 22], n: 60, hero: 'cupcake', hs: 56, rock: 'macaron' },
+    bibliotheque: { dec: ['bookstack', 'book', 'book', 'scroll'], h: [14, 24], n: 50, hero: 'openbook', hs: 40, rock: 'bookstack' },
+    parchemin: { dec: ['scroll', 'quill', 'scroll', 'speech'], h: [12, 22], n: 50, hero: 'scroll', hs: 44, rock: 'quill' },
+    bd: { dec: ['speech', 'sparkle', 'speech', 'invader'], h: [14, 24], n: 60, hero: 'speech', hs: 46, rock: 'speech' },
+    conte: { dec: ['mushroom', 'wizardhat', 'flower', 'mushroom'], h: [14, 24], n: 60, hero: 'wizardhat', hs: 50, rock: 'mushroom' },
+    manuscrit: { dec: ['scroll', 'sparkle', 'scroll', 'quill'], h: [12, 20], n: 50, hero: 'crown', hs: 44, rock: 'scroll' },
+    cirque: { dec: ['bigtop', 'confetti', 'mask', 'confetti'], h: [16, 26], n: 45, hero: 'bigtop', hs: 40, rock: 'mask' },
+    partition: { dec: ['note', 'note', 'sparkle', 'note'], h: [14, 24], n: 50, hero: 'note', hs: 50, rock: 'note' },
+    carnaval: { dec: ['mask', 'confetti', 'mask', 'confetti'], h: [16, 26], n: 60, hero: 'mask', hs: 48, rock: 'bigtop' },
+    cinema: { dec: ['reel', 'sparkle', 'reel', 'sparkle'], h: [14, 24], n: 40, hero: 'reel', hs: 50, rock: 'reel' },
+    jeuxvideo: { dec: ['invader', 'joystick', 'invader', 'sparkle'], h: [22, 34], n: 55, hero: 'invader', hs: 64, rock: 'joystick' },
+    paris: { dec: ['eiffel', 'car', 'car', 'taxi'], h: [18, 28], n: 60, hero: 'eiffel', rock: 'phonebox' },
+    newyork: { dec: ['skyscraper', 'taxi', 'skyscraper', 'bus'], h: [22, 34], n: 55, hero: 'skyscraper', hs: 40, rock: 'skyscraper' },
+    tokyo: { dec: ['tokyotower', 'skyscraper', 'bus', 'car'], h: [16, 28], n: 55, hero: 'tokyotower', rock: 'bamboo' },
+    caire: { dec: ['pyramid', 'camel', 'pyramid', 'dune'], h: [18, 30], n: 45, hero: 'pyramid', rock: 'camel' },
+    venise: { dec: ['gondola', 'lily', 'gondola', 'rialto'], h: [14, 24], n: 50, hero: 'rialto', rock: 'lily' },
+    rio: { dec: ['palm', 'palm', 'bush', 'bird'], h: [24, 40], n: 45, hero: 'christ', rock: 'bush' },
+    londres: { dec: ['bigben', 'phonebox', 'taxi', 'bus'], h: [16, 26], n: 50, hero: 'bigben', rock: 'phonebox' },
+    moscou: { dec: ['basil', 'kremlin', 'car', 'basil'], h: [18, 28], n: 45, hero: 'kremlin', rock: 'basil' },
+    marrakech: { dec: ['minaret', 'sparkle', 'minaret', 'camel'], h: [18, 30], n: 50, hero: 'minaret', rock: 'dune' }
+  };
 
   // 45 maps de plus : nature, espace, nourriture, livres et villes du monde
   const THEME_DATA = [
@@ -1725,7 +2401,7 @@
 
   // ---------- Jeu ----------
   const canvas = $('game');
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
   let W = 0, H = 0;
   function resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -1806,7 +2482,8 @@
       currents.push({ x, y, rx, ry, dx: Math.cos(a), dy: Math.sin(a) });
     }
     decor = Array.from({ length: mp.decorCount }, () => ({
-      x: rand(0, WORLD), y: rand(0, WORLD), h: rand(mp.decorH[0], mp.decorH[1]), phase: rand(0, 6)
+      x: rand(0, WORLD), y: rand(0, WORLD), h: rand(mp.decorH[0], mp.decorH[1]), phase: rand(0, 6),
+      draw: mp.decorList ? mp.decorList[Math.floor(rand(0, mp.decorList.length))] : null
     }));
     bubbles = Array.from({ length: mp.particles.count }, () => ({
       x: rand(0, WORLD), y: rand(0, WORLD),
@@ -2538,7 +3215,7 @@
   }
 
   // Obstacle : même forme et même collision partout, mais un aspect propre à chaque map
-  function drawObstacle(rk, sx, sy, st) {
+  function drawObstacle(rk, sx, sy, st, now) {
     const r = rk.r;
     ctx.fillStyle = st.fill;
     ctx.beginPath();
@@ -2547,7 +3224,10 @@
     ctx.strokeStyle = st.edge;
     ctx.lineWidth = st.edgeWidth;
     ctx.stroke();
-    if (st.detail === 'canopy') {
+    if (st.sprite) {
+      // Objet posé sur le rocher : la collision reste circulaire
+      st.sprite({ h: r * 0.8, phase: r * 0.1 }, sx, sy, now);
+    } else if (st.detail === 'canopy') {
       // Cime d'arbre vue du dessus, avec son tronc
       ctx.fillStyle = 'rgba(190, 242, 100, 0.25)';
       ctx.beginPath();
@@ -2708,7 +3388,7 @@
     for (const s of decor) {
       const sx = s.x - camX, sy = s.y - camY;
       if (sx < -120 || sx > W + 120 || sy < -120 || sy > H + 120) continue;
-      mp.drawDecor(s, sx, sy, now);
+      (s.draw || mp.drawDecor)(s, sx, sy, now);
     }
     ctx.restore();
 
@@ -2717,7 +3397,7 @@
     for (const rk of rocks) {
       const sx = rk.x - camX, sy = rk.y - camY;
       if (sx + rk.r < 0 || sx - rk.r > W || sy + rk.r < 0 || sy - rk.r > H) continue;
-      drawObstacle(rk, sx, sy, mp.rock);
+      drawObstacle(rk, sx, sy, mp.rock, now);
     }
     ctx.restore();
 
