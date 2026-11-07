@@ -801,7 +801,7 @@
   // Les 100 meilleurs joueurs, par niveau puis par XP
   async function fetchRanking() {
     // Clé passée dans l'URL : requête simple, sans en-têtes spéciaux (moins de blocages du navigateur)
-    const url = `${RANK.url}/rest/v1/${RANK.table}?select=user_id,pseudo,level,xp&order=level.desc,xp.desc&limit=100&apikey=${encodeURIComponent(RANK.key)}`;
+    const url = `${RANK.url}/rest/v1/${RANK.table}?select=user_id,pseudo,level,xp&semaine=eq.${weekKey()}&order=xp.desc&limit=100&apikey=${encodeURIComponent(RANK.key)}`;
     const r = await fetch(url);
     if (!r.ok) throw new Error(await rankError(r));
     return r.json();
@@ -836,14 +836,27 @@
   }
   function myUid() { const a = readAuth(); return a ? a.uid : null; }
 
+  // Clé de la semaine : le lundi de la semaine en cours (heure de Paris). Change chaque lundi 00 h.
+  function weekKey() {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).formatToParts(new Date());
+    const get = (t) => parts.find((x) => x.type === t).value;
+    const idx = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(get('weekday'));
+    const lundi = new Date(Date.UTC(Number(get('year')), Number(get('month')) - 1, Number(get('day')) - idx));
+    return lundi.toISOString().slice(0, 10);
+  }
+  // Points de la semaine en cours : repart à zéro quand la clé change
+  function weekRoll() {
+    if (!save.week || save.week.key !== weekKey()) save.week = { key: weekKey(), xp: 0 };
+  }
+
   // Envoie ton score : ta ligne (liée à ton compte) est créée ou mise à jour
   async function pushScore() {
     if (!rankEnabled() || !save.pseudo) return;
     let a = await authSession(false);
-    const send = () => fetch(`${RANK.url}/rest/v1/${RANK.table}?on_conflict=user_id`, {
+    const send = () => fetch(`${RANK.url}/rest/v1/${RANK.table}?on_conflict=user_id,semaine`, {
       method: 'POST',
       headers: rankHeaders({ Authorization: `Bearer ${a.token}`, Prefer: 'resolution=merge-duplicates,return=minimal' }),
-      body: JSON.stringify({ user_id: a.uid, pseudo: save.pseudo, level: levelInfo().level, xp: save.xp })
+      body: JSON.stringify({ user_id: a.uid, semaine: weekKey(), pseudo: save.pseudo, xp: (save.week && save.week.key === weekKey() ? save.week.xp : 0) })
     });
     let r = await send();
     if (r.status === 401) { a = await authSession(true); r = await send(); }
@@ -3483,6 +3496,8 @@
     save.coins += earned;
     save.gems += gems;
     save.xp += score;
+    weekRoll();
+    save.week.xp += score;
     save.best = Math.max(save.best, score);
     if (dailyMode) {
       const day = todayKey();
