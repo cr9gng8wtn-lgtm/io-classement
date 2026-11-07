@@ -85,6 +85,17 @@
     @keyframes giftDrop { 0% { transform: translateY(-70vh) rotate(14deg); opacity: 0; } 15% { opacity: 1; } 70% { transform: translateY(0) rotate(14deg); } 85% { transform: translateY(-10px) rotate(14deg); } 100% { transform: translateY(0) rotate(14deg); } }
     .gift-intro .ribbon { stroke-dasharray: 100; stroke-dashoffset: 100; animation: ribbonDraw .9s ease-out .3s forwards; }
     @keyframes ribbonDraw { to { stroke-dashoffset: 0; } }
+    .gift-intro .pbar { transform-box: fill-box; transform-origin: bottom; animation: podiumRise .6s cubic-bezier(.3, 1.2, .5, 1) both; }
+    .gift-intro .pbar-2 { animation-delay: .25s; }
+    .gift-intro .pbar-1 { animation-delay: .05s; }
+    .gift-intro .pbar-3 { animation-delay: .4s; }
+    .gift-intro .pcrown { transform-box: fill-box; transform-origin: center; animation: crownPop .5s ease-out .6s both; }
+    @keyframes podiumRise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+    @keyframes crownPop { from { transform: scale(0) translateY(10px); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .gift-intro .cal { transform-box: fill-box; transform-origin: top center; animation: calFlip .7s ease-out .2s both; }
+    .gift-intro .cal-on { transform-box: fill-box; transform-origin: center; animation: calPulse 1s ease-in-out .9s infinite; }
+    @keyframes calFlip { from { transform: perspective(300px) rotateX(-90deg); opacity: 0; } to { transform: perspective(300px) rotateX(0); opacity: 1; } }
+    @keyframes calPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
     @keyframes giftRays { 0% { transform: scale(.3); opacity: 0; } 40% { opacity: 1; } 100% { transform: scale(1.25); opacity: 0; } }
     @keyframes giftExit { 0% { transform: translate(0, 0) rotate(14deg) scale(1); opacity: 1; } 100% { transform: translate(60vw, -70vh) rotate(194deg) scale(.3); opacity: 0; } }
     body.gift-blur canvas { filter: blur(7px) brightness(.45); }
@@ -4556,6 +4567,62 @@
     setTimeout(() => { el.remove(); document.body.classList.remove('gift-blur'); }, 2500);
   }
 
+  // Même entrée que la boutique (chute, rayons, flou), avec un dessin au centre
+  function playDecoIntro(inner) {
+    const old = document.querySelector('.gift-intro');
+    if (old) old.remove();
+    let rays = '';
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI / 6;
+      const x1 = 60 + Math.cos(a) * 56, y1 = 60 + Math.sin(a) * 56;
+      const x2 = 60 + Math.cos(a) * 74, y2 = 60 + Math.sin(a) * 74;
+      rays += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+    }
+    const el = document.createElement('div');
+    el.className = 'gift-intro';
+    el.innerHTML =
+      '<svg viewBox="0 0 120 120" aria-hidden="true">' +
+      '<g class="rays" fill="none" stroke="#fde047" stroke-width="3" stroke-linecap="round">' + rays + '</g>' +
+      inner + '</svg>';
+    document.body.appendChild(el);
+    document.body.classList.add('gift-blur');
+    setTimeout(() => { el.remove(); document.body.classList.remove('gift-blur'); }, 2500);
+  }
+
+  // Podium : trois marches qui montent, la première avec une couronne
+  function playPodiumIntro() {
+    playDecoIntro(
+      '<rect class="pbar pbar-2" x="18" y="72" width="28" height="34" rx="3" fill="#94a3b8" stroke="#334155" stroke-width="2.5"/>' +
+      '<rect class="pbar pbar-1" x="46" y="50" width="28" height="56" rx="3" fill="#facc15" stroke="#854d0e" stroke-width="2.5"/>' +
+      '<rect class="pbar pbar-3" x="74" y="84" width="28" height="22" rx="3" fill="#d97706" stroke="#78350f" stroke-width="2.5"/>' +
+      '<text x="32" y="96" font-size="14" font-weight="800" text-anchor="middle" fill="#0f172a">2</text>' +
+      '<text x="60" y="84" font-size="16" font-weight="800" text-anchor="middle" fill="#0f172a">1</text>' +
+      '<text x="88" y="106" font-size="14" font-weight="800" text-anchor="middle" fill="#0f172a">3</text>' +
+      '<polygon class="pcrown" points="50,44 54,34 60,40 66,34 70,44" fill="#fde047" stroke="#854d0e" stroke-width="2" stroke-linejoin="round"/>'
+    );
+  }
+
+  // Calendrier : une feuille qui se rabat, avec un jour mis en avant
+  function playCalendarIntro() {
+    let days = '';
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) {
+      const x = 28 + c * 16, y = 52 + r * 13;
+      const on = r === 1 && c === 2;
+      days += on
+        ? `<rect class="cal-on" x="${x}" y="${y}" width="11" height="9" rx="2" fill="#facc15" stroke="#854d0e" stroke-width="1.5"/>`
+        : `<rect x="${x}" y="${y}" width="11" height="9" rx="2" fill="#e2e8f0"/>`;
+    }
+    playDecoIntro(
+      '<g class="cal">' +
+      '<rect x="20" y="24" width="80" height="78" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="3"/>' +
+      '<rect x="20" y="24" width="80" height="20" rx="8" fill="#ef4444"/>' +
+      '<rect x="20" y="36" width="80" height="8" fill="#ef4444"/>' +
+      '<line x1="38" y1="18" x2="38" y2="30" stroke="#334155" stroke-width="4" stroke-linecap="round"/>' +
+      '<line x1="82" y1="18" x2="82" y2="30" stroke="#334155" stroke-width="4" stroke-linecap="round"/>' +
+      days + '</g>'
+    );
+  }
+
   // ---------- Boutons ----------
   $('btn-play').onclick = () => { dailyMode = false; startRun(); };
   $('btn-again').onclick = () => {
@@ -4572,6 +4639,7 @@
     $('rank-msg').textContent = '';
     updateRankPanel();
     show('ranking');
+    playPodiumIntro();
     if (save.pseudo) startRankTimer();
   };
   $('rank-save').onclick = savePseudo;
@@ -4589,7 +4657,7 @@
   $('detail-look').height = $('detail-look').width;
   $('level-box').onclick = () => { renderLevels(); show('levels'); };
   $('btn-trainees').onclick = () => { $('trainees-msg').textContent = ''; renderTrainees(); show('trainees'); playRibbonIntro(); };
-  $('btn-daily').onclick = () => { $('daily-msg').textContent = ''; renderDaily(); show('daily'); };
+  $('btn-daily').onclick = () => { $('daily-msg').textContent = ''; renderDaily(); show('daily'); playCalendarIntro(); };
   $('buy-skin').onclick = () => buyBox('skin');
   $('buy-trainee').onclick = () => buyBox('trainee');
   $('btn-claim').onclick = claimDaily;
