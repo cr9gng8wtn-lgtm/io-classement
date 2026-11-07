@@ -3059,6 +3059,7 @@
     $('detail-msg').textContent = '';
     renderDetail();
     show('detail');
+    playItemIntro(item);
   }
   function renderDetail() {
     const item = detailItem;
@@ -4499,6 +4500,32 @@
       '<line x1="92" y1="40" x2="88" y2="72" stroke="#bae6fd" stroke-width="3"/>' +
       '<circle cx="46" cy="98" r="8" fill="#facc15" stroke="#0c4a6e" stroke-width="3"/>' +
       '<circle cx="92" cy="98" r="8" fill="#facc15" stroke="#0c4a6e" stroke-width="3"/>' +
+      '</svg>';
+    document.body.appendChild(el);
+    document.body.classList.add('gift-blur');
+    setTimeout(() => { el.remove(); document.body.classList.remove('gift-blur'); }, 2500);
+  }
+
+  // Même entrée que la boutique, pour l'ouverture d'une fiche de skin ou de trainée :
+  // l'objet tombe au centre, des rayons de sa couleur partent autour, le fond se floute
+  function playItemIntro(item) {
+    const old = document.querySelector('.gift-intro');
+    if (old) old.remove();
+    const col = item.color || '#facc15';
+    let rays = '';
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI / 6;
+      const x1 = 60 + Math.cos(a) * 56, y1 = 60 + Math.sin(a) * 56;
+      const x2 = 60 + Math.cos(a) * 74, y2 = 60 + Math.sin(a) * 74;
+      rays += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+    }
+    const el = document.createElement('div');
+    el.className = 'gift-intro';
+    el.innerHTML =
+      '<svg viewBox="0 0 120 120" aria-hidden="true">' +
+      '<g class="rays" fill="none" stroke="' + col + '" stroke-width="3" stroke-linecap="round">' + rays + '</g>' +
+      '<circle cx="60" cy="60" r="34" fill="' + col + '" fill-opacity=".35" stroke="' + col + '" stroke-width="4"/>' +
+      '<circle cx="60" cy="60" r="16" fill="' + col + '"/>' +
       '</svg>';
     document.body.appendChild(el);
     document.body.classList.add('gift-blur');
