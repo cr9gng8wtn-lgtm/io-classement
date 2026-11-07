@@ -107,7 +107,10 @@
     .menu-btn:disabled { filter: grayscale(1); opacity: .6; }
     /* PLAY : vague animée qui défile dans le bouton, derrière le texte */
     #btn-play { overflow: hidden; isolation: isolate; }
-    #btn-play::before { content: ''; position: absolute; left: 0; bottom: 0; width: 200%; height: 55%; z-index: -1; pointer-events: none; background: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath d='M0 20 Q25 4 50 20 T100 20 T150 20 T200 20 V40 H0Z' fill='rgba(250,204,21,0.28)'/%3E%3Cpath d='M0 28 Q25 14 50 28 T100 28 T150 28 T200 28 V40 H0Z' fill='rgba(250,204,21,0.18)'/%3E%3C/svg%3E") 0 0 / 25% 100% repeat-x; animation: playWave 3s linear infinite; }
+    #btn-play::before { content: ''; position: absolute; left: 0; bottom: 0; width: 200%; height: 55%; z-index: -1; pointer-events: none; background: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40' preserveAspectRatio='none'%3E%3Cpath d='M0 20 Q25 4 50 20 T100 20 T150 20 T200 20 V40 H0Z' fill='rgba(250,204,21,0.28)'/%3E%3Cpath d='M0 28 Q25 14 50 28 T100 28 T150 28 T200 28 V40 H0Z' fill='rgba(250,204,21,0.18)'/%3E%3C/svg%3E") 0 0 / 25% 100% repeat-x; animation: playWave 4.5s linear infinite; }
+    /* Niveau de l'eau qui monte et descend doucement (houle), sous la vague */
+    #btn-play::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 38%; z-index: -2; pointer-events: none; background: rgba(250, 204, 21, .16); animation: playSwell 2.6s ease-in-out infinite alternate; }
+    @keyframes playSwell { from { transform: translateY(0); } to { transform: translateY(-7px); } }
     @keyframes playWave { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     .slider-row input[type=text] { width: 100%; padding: 10px; border-radius: 10px; border: 2px solid #334155; background: #0f172a; color: #f8fafc; font: 600 16px system-ui, sans-serif; }
     .live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 8px #4ade80; margin-right: 4px; vertical-align: middle; }
