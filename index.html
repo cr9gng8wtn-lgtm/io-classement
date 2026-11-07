@@ -273,11 +273,8 @@
   const WORLD = 3600;        // taille de la map (px)
   const FOOD_COUNT = 900;
   const ENEMY_COUNT = 30;
-  const ROCK_COUNT = 26;     // récifs : obstacles qu'on ne traverse pas
   const CURRENT_COUNT = 6;   // zones de courant qui poussent le joueur
   const CURRENT_PUSH = 70;   // vitesse de poussée du courant (px/s)
-  const SEAWEED_COUNT = 90;  // algues de décor
-  const BUBBLE_COUNT = 70;   // bulles qui montent
 
   // Texture de l'océan : grain et ondulations dessinés une fois, puis répétés sur la carte
   const oceanTex = document.createElement('canvas');
@@ -308,7 +305,6 @@
     }
     tc.stroke();
   }
-  let oceanPattern = null; // créé à la première image, quand le contexte est prêt
   const FOLLOW_GAP = 42;
   const MAX_FOLLOWERS = 3;
   const PLAYER_SPEED = 145;  // vitesse constante du joueur (px/s)
@@ -813,7 +809,562 @@
 
   // Maps : elles tournent automatiquement, une nouvelle map tous les 3 niveaux
   const MAP_EVERY = 3;
-  const MAPS = [{ id: 'ocean', name: 'Océan', draw: paintOceanLogo }];
+  // Tuile de texture répétable : des points (et des traits) dessinés avec des bords qui se rejoignent
+  function makeSpeckTile(spots, n, rMin, rMax, strokes) {
+    const cv = document.createElement('canvas');
+    cv.width = 256;
+    cv.height = 256;
+    const t = cv.getContext('2d');
+    for (let i = 0; i < n; i++) {
+      const x = tr(0, 256), y = tr(0, 256), r = tr(rMin, rMax);
+      t.fillStyle = spots[Math.floor(Math.random() * spots.length)];
+      for (const dx of [-256, 0, 256]) {
+        for (const dy of [-256, 0, 256]) {
+          t.beginPath();
+          t.arc(x + dx, y + dy, r, 0, Math.PI * 2);
+          t.fill();
+        }
+      }
+    }
+    if (strokes) {
+      t.strokeStyle = strokes.color;
+      t.lineWidth = strokes.width;
+      for (const base of strokes.rows) {
+        t.beginPath();
+        for (let x = 0; x <= 256; x += 4) {
+          const y = base + Math.sin((x / 256) * Math.PI * 4 + base) * strokes.wave;
+          if (x === 0) t.moveTo(x, y); else t.lineTo(x, y);
+        }
+        t.stroke();
+      }
+    }
+    return cv;
+  }
+
+  // Logo de la map Forêt, dans une zone de 220 x 120
+  function paintForestLogo(c, now) {
+    const g = c.createLinearGradient(0, 0, 0, 120);
+    g.addColorStop(0, '#3f6212');
+    g.addColorStop(1, '#052e16');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 220, 120);
+    // rayons de soleil à travers les feuillages
+    c.fillStyle = '#d9f99d';
+    c.globalAlpha = 0.08;
+    for (let i = 0; i < 3; i++) {
+      const x0 = 30 + i * 70;
+      c.beginPath();
+      c.moveTo(x0, 0);
+      c.lineTo(x0 + 18, 0);
+      c.lineTo(x0 + 50, 120);
+      c.lineTo(x0 + 30, 120);
+      c.closePath();
+      c.fill();
+    }
+    c.globalAlpha = 1;
+    // cimes d'arbres
+    for (const [x, y, r] of [[30, 72, 26], [88, 54, 32], [150, 78, 28], [196, 60, 22]]) {
+      c.fillStyle = '#14532d';
+      c.beginPath();
+      c.arc(x, y, r, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#166534';
+      c.beginPath();
+      c.arc(x - r * 0.3, y - r * 0.3, r * 0.45, 0, Math.PI * 2);
+      c.fill();
+    }
+    // feuilles qui tombent
+    c.fillStyle = '#a3e635';
+    for (let i = 0; i < 5; i++) {
+      const x = 20 + i * 45 + Math.sin(now / 800 + i) * 6;
+      const y = ((now / 40 + i * 37) % 140) - 10;
+      c.beginPath();
+      c.ellipse(x, y, 3, 1.6, now / 600 + i, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  // Logo de la map Désert, dans une zone de 220 x 120
+  function paintDesertLogo(c, now) {
+    const g = c.createLinearGradient(0, 0, 0, 120);
+    g.addColorStop(0, '#fde68a');
+    g.addColorStop(1, '#f59e0b');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 220, 120);
+    // soleil
+    c.fillStyle = '#fef3c7';
+    c.beginPath();
+    c.arc(176, 30, 16, 0, Math.PI * 2);
+    c.fill();
+    // dunes, deux plans
+    c.fillStyle = '#d97706';
+    c.beginPath();
+    c.moveTo(0, 90);
+    c.quadraticCurveTo(60, 56, 120, 86);
+    c.quadraticCurveTo(170, 104, 220, 72);
+    c.lineTo(220, 120);
+    c.lineTo(0, 120);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#92400e';
+    c.beginPath();
+    c.moveTo(0, 108);
+    c.quadraticCurveTo(80, 84, 150, 104);
+    c.quadraticCurveTo(190, 112, 220, 98);
+    c.lineTo(220, 120);
+    c.lineTo(0, 120);
+    c.closePath();
+    c.fill();
+    // grains de sable qui filent
+    c.fillStyle = 'rgba(254, 243, 199, 0.7)';
+    for (let i = 0; i < 8; i++) {
+      const x = ((now / 12 + i * 61) % 240) - 10;
+      const y = 40 + ((i * 23) % 50);
+      c.fillRect(x, y, 3, 1.2);
+    }
+  }
+
+  // Logo de la map Volcan, dans une zone de 220 x 120
+  function paintVolcanoLogo(c, now) {
+    const g = c.createLinearGradient(0, 0, 0, 120);
+    g.addColorStop(0, '#450a0a');
+    g.addColorStop(1, '#1c1917');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 220, 120);
+    // montagne
+    c.fillStyle = '#292524';
+    c.beginPath();
+    c.moveTo(20, 120);
+    c.lineTo(110, 34);
+    c.lineTo(200, 120);
+    c.closePath();
+    c.fill();
+    // lave du cratère et coulée qui pulse
+    const glow = 0.6 + Math.sin(now / 300) * 0.25;
+    c.strokeStyle = `rgba(249, 115, 22, ${glow})`;
+    c.lineWidth = 3;
+    c.beginPath();
+    c.moveTo(110, 34);
+    c.lineTo(104, 58);
+    c.lineTo(118, 80);
+    c.lineTo(108, 100);
+    c.stroke();
+    c.fillStyle = `rgba(251, 146, 60, ${glow})`;
+    c.beginPath();
+    c.ellipse(110, 34, 10, 4, 0, 0, Math.PI * 2);
+    c.fill();
+    // braises qui montent
+    c.fillStyle = '#fdba74';
+    for (let i = 0; i < 6; i++) {
+      const y = 110 - ((now / 25 + i * 29) % 100);
+      const x = 80 + i * 10 + Math.sin(now / 400 + i) * 4;
+      c.beginPath();
+      c.arc(x, y, 1.6 + (i % 2), 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  // Logo de la map Glace, dans une zone de 220 x 120
+  function paintIceLogo(c, now) {
+    const g = c.createLinearGradient(0, 0, 0, 120);
+    g.addColorStop(0, '#e0f2fe');
+    g.addColorStop(1, '#0c4a6e');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 220, 120);
+    // banquise et glaciers
+    c.fillStyle = '#f0f9ff';
+    c.beginPath();
+    c.moveTo(0, 100);
+    c.lineTo(40, 58);
+    c.lineTo(78, 92);
+    c.lineTo(120, 48);
+    c.lineTo(170, 96);
+    c.lineTo(220, 66);
+    c.lineTo(220, 120);
+    c.lineTo(0, 120);
+    c.closePath();
+    c.fill();
+    // face ombrée d'un pic
+    c.fillStyle = '#bae6fd';
+    c.beginPath();
+    c.moveTo(120, 48);
+    c.lineTo(140, 80);
+    c.lineTo(120, 92);
+    c.closePath();
+    c.fill();
+    // flocons qui tombent
+    c.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    for (let i = 0; i < 9; i++) {
+      const x = (i * 27 + Math.sin(now / 900 + i) * 8 + 220) % 220;
+      const y = ((now / 35 + i * 19) % 130) - 5;
+      c.beginPath();
+      c.arc(x, y, 1.4 + (i % 3) * 0.5, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  const MAPS = [
+    {
+      id: 'ocean', name: 'Océan', draw: paintOceanLogo,
+      sky: [[0, '#0e7490'], [0.55, '#075985'], [1, '#082f49']],
+      tile: oceanTex,
+      rays: { color: '#e0f2fe', alpha: 0.06 },
+      current: { fill: 'rgba(125, 211, 252, 0.08)', streak: '#bae6fd' },
+      obstacles: 26,
+      rock: { fill: '#1e3a4a', edge: 'rgba(34, 211, 238, 0.55)', edgeWidth: 3, detail: 'reef' },
+      decorCount: 90, decorH: [50, 110], drawDecor: drawSeaweed,
+      particles: { count: 70, color: 'rgba(224, 242, 254, 0.5)', ring: true, dx: 0, dy: -1, rMin: 2, rMax: 6, speedMin: 20, speedMax: 60 }
+    },
+    {
+      id: 'forest', name: 'Forêt', draw: paintForestLogo,
+      sky: [[0, '#3f6212'], [0.6, '#14532d'], [1, '#052e16']],
+      tile: makeSpeckTile(['rgba(20, 83, 45, 0.35)', 'rgba(132, 204, 22, 0.10)', 'rgba(2, 44, 34, 0.30)'], 200, 3, 14, null),
+      rays: { color: '#d9f99d', alpha: 0.05 },
+      current: { fill: 'rgba(187, 247, 208, 0.08)', streak: '#bbf7d0' },
+      obstacles: 34,
+      rock: { fill: '#15803d', edge: '#14532d', edgeWidth: 4, detail: 'canopy' },
+      decorCount: 120, decorH: [18, 34], drawDecor: drawGrass,
+      particles: { count: 60, color: 'rgba(190, 242, 100, 0.6)', ring: false, dx: 0.6, dy: 0.4, rMin: 1.5, rMax: 3, speedMin: 15, speedMax: 35 }
+    },
+    {
+      id: 'desert', name: 'Désert', draw: paintDesertLogo,
+      sky: [[0, '#fbbf24'], [0.5, '#d97706'], [1, '#92400e']],
+      tile: makeSpeckTile(['rgba(254, 243, 199, 0.14)', 'rgba(120, 53, 15, 0.12)'], 320, 0.5, 1.8, { color: 'rgba(254, 243, 199, 0.12)', width: 2, rows: [60, 140, 220], wave: 6 }),
+      rays: { color: '#fef3c7', alpha: 0.08 },
+      current: { fill: 'rgba(253, 230, 138, 0.10)', streak: '#fde68a' },
+      obstacles: 22,
+      rock: { fill: '#b45309', edge: 'rgba(254, 215, 170, 0.6)', edgeWidth: 3, detail: 'strata' },
+      decorCount: 40, decorH: [36, 60], drawDecor: drawCactus,
+      particles: { count: 110, color: 'rgba(254, 243, 199, 0.4)', ring: false, dx: 1, dy: 0.1, rMin: 0.8, rMax: 1.8, speedMin: 60, speedMax: 120 }
+    },
+    {
+      id: 'volcano', name: 'Volcan', draw: paintVolcanoLogo,
+      sky: [[0, '#7c2d12'], [0.55, '#431407'], [1, '#1c1917']],
+      tile: makeSpeckTile(['rgba(249, 115, 22, 0.10)', 'rgba(0, 0, 0, 0.25)', 'rgba(120, 113, 108, 0.12)'], 240, 0.6, 2.2, { color: 'rgba(251, 146, 60, 0.18)', width: 1.2, rows: [90, 170], wave: 3 }),
+      rays: { color: '#fb923c', alpha: 0.05 },
+      current: { fill: 'rgba(253, 186, 116, 0.08)', streak: '#fdba74' },
+      obstacles: 28,
+      rock: { fill: '#292524', edge: 'rgba(249, 115, 22, 0.8)', edgeWidth: 4, detail: 'lava' },
+      decorCount: 30, decorH: [8, 14], drawDecor: drawVent,
+      particles: { count: 80, color: 'rgba(251, 146, 60, 0.7)', ring: false, dx: 0.1, dy: -1, rMin: 1, rMax: 2.5, speedMin: 20, speedMax: 50 }
+    },
+    {
+      id: 'ice', name: 'Glace', draw: paintIceLogo,
+      sky: [[0, '#e0f2fe'], [0.55, '#7dd3fc'], [1, '#0c4a6e']],
+      tile: makeSpeckTile(['rgba(255, 255, 255, 0.14)', 'rgba(14, 116, 144, 0.10)'], 220, 0.8, 2.6, { color: 'rgba(255, 255, 255, 0.22)', width: 1, rows: [40, 128, 200], wave: 4 }),
+      rays: { color: '#ffffff', alpha: 0.10 },
+      current: { fill: 'rgba(224, 242, 254, 0.08)', streak: '#e0f2fe' },
+      obstacles: 26,
+      rock: { fill: 'rgba(186, 230, 253, 0.9)', edge: 'rgba(255, 255, 255, 0.9)', edgeWidth: 3, detail: 'shine' },
+      decorCount: 60, decorH: [14, 30], drawDecor: drawCrystal,
+      particles: { count: 90, color: 'rgba(255, 255, 255, 0.7)', ring: false, dx: 0.2, dy: 1, rMin: 1.5, rMax: 3.5, speedMin: 15, speedMax: 35 }
+    }
+  ];
+  // ----- Décor des nouvelles maps : chaque type reçoit ses couleurs depuis la map -----
+  function decBlade(s, sx, sy, now, c1) {
+    ctx.strokeStyle = c1;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    const sway = Math.sin(now / 700 + s.phase) * 6;
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath();
+      ctx.moveTo(sx + k * 4, sy);
+      ctx.quadraticCurveTo(sx + k * 5 + sway * 0.5, sy - s.h * 0.5, sx + k * 8 + sway, sy - s.h);
+      ctx.stroke();
+    }
+  }
+
+  function decMound(s, sx, sy, now, c1, c2) {
+    const r = s.h * 0.5;
+    ctx.fillStyle = c1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c2;
+    ctx.beginPath();
+    ctx.arc(sx - r * 0.3, sy - r * 0.3, r * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function decSpike(s, sx, sy, now, c1, c2) {
+    const h = s.h, w = h * 0.4;
+    ctx.fillStyle = c1;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - h);
+    ctx.lineTo(sx + w, sy);
+    ctx.lineTo(sx - w, sy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = c2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - h);
+    ctx.lineTo(sx + w * 0.3, sy - h * 0.4);
+    ctx.lineTo(sx - w * 0.1, sy - h * 0.3);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function decStar(s, sx, sy, now, c1) {
+    const k = s.h * (0.8 + 0.2 * Math.sin(now / 300 + s.phase));
+    ctx.fillStyle = c1;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - k);
+    ctx.lineTo(sx + k * 0.25, sy);
+    ctx.lineTo(sx, sy + k);
+    ctx.lineTo(sx - k * 0.25, sy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sx - k, sy);
+    ctx.lineTo(sx, sy + k * 0.25);
+    ctx.lineTo(sx + k, sy);
+    ctx.lineTo(sx, sy - k * 0.25);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function decFlower(s, sx, sy, now, c1, c2) {
+    const r = s.h * 0.35;
+    ctx.fillStyle = c1;
+    for (let k = 0; k < 5; k++) {
+      const a = (k * Math.PI * 2) / 5 + s.phase;
+      ctx.beginPath();
+      ctx.arc(sx + Math.cos(a) * r, sy + Math.sin(a) * r, r * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = c2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Bâtiment vu du dessus, avec son ombre
+  function decBlock(s, sx, sy, now, c1, c2) {
+    const w = s.h, d = s.h * 0.2;
+    ctx.fillStyle = c2;
+    ctx.fillRect(sx - w / 2 + d, sy - w / 2 + d, w, w);
+    ctx.fillStyle = c1;
+    ctx.fillRect(sx - w / 2, sy - w / 2, w, w);
+  }
+
+  // Bonbon en spirale
+  function decSwirl(s, sx, sy, now, c1, c2) {
+    const r = s.h * 0.5;
+    ctx.fillStyle = c1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = c2;
+    ctx.lineWidth = Math.max(2, r * 0.25);
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 0.65, 0, Math.PI * 1.4);
+    ctx.stroke();
+  }
+
+  // Champignon vu du dessus : un chapeau à pois
+  function decMush(s, sx, sy, now, c1, c2) {
+    const r = s.h * 0.6;
+    ctx.fillStyle = c1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c2;
+    for (let k = 0; k < 4; k++) {
+      const a = (k * Math.PI) / 2 + s.phase;
+      ctx.beginPath();
+      ctx.arc(sx + Math.cos(a) * r * 0.5, sy + Math.sin(a) * r * 0.5, r * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Palmier vu du dessus : des palmes qui ondulent
+  function decPalm(s, sx, sy, now, c1) {
+    const sway = Math.sin(now / 900 + s.phase) * 0.3;
+    ctx.strokeStyle = c1;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 6; k++) {
+      const a = (k * Math.PI) / 3 + sway;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + Math.cos(a) * s.h * 0.5, sy + Math.sin(a) * s.h * 0.5 - 4);
+      ctx.stroke();
+    }
+  }
+
+  // Source lumineuse qui pulse
+  function decPulse(s, sx, sy, now, c1, c2) {
+    const p = (Math.sin(now / 400 + s.phase) + 1) / 2;
+    ctx.globalAlpha = 0.3 + p * 0.5;
+    ctx.fillStyle = c2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.h * (0.6 + p * 0.4), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = c1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.h * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Tous les types de décor, par leur nom
+  const DECOR = {
+    seaweed: (s, sx, sy, now) => drawSeaweed(s, sx, sy, now),
+    grass: (s, sx, sy, now) => drawGrass(s, sx, sy, now),
+    cactus: (s, sx, sy) => drawCactus(s, sx, sy),
+    vent: (s, sx, sy, now) => drawVent(s, sx, sy, now),
+    crystal: (s, sx, sy) => drawCrystal(s, sx, sy),
+    blade: decBlade, mound: decMound, spike: decSpike, star: decStar,
+    flower: decFlower, block: decBlock, swirl: decSwirl, mush: decMush,
+    palm: decPalm, pulse: decPulse
+  };
+
+  // Fabrique une map complète à partir de ses données
+  function buildThemeMap(d) {
+    const dec = DECOR[d.dec.k] || DECOR.blade;
+    const L = d.logo;
+    return {
+      id: d.id,
+      name: d.name,
+      draw: (c, now) => paintThemeLogo(c, now, L),
+      sky: [[0, d.sky[0]], [0.55, d.sky[1]], [1, d.sky[2]]],
+      tile: makeSpeckTile(d.tex.s, d.tex.n, d.tex.r[0], d.tex.r[1],
+        d.tex.line ? { color: d.tex.line, width: 1.5, rows: [60, 140, 220], wave: 5 } : null),
+      rays: { color: d.ray[0], alpha: d.ray[1] },
+      current: { fill: d.cur[0], streak: d.cur[1] },
+      obstacles: d.obs,
+      rock: { fill: d.rock.f, edge: d.rock.e, edgeWidth: d.rock.w, detail: d.rock.d, c2: d.rock.c2 },
+      decorCount: d.dec.n,
+      decorH: d.dec.h,
+      drawDecor: (s, sx, sy, now) => dec(s, sx, sy, now, d.dec.c1, d.dec.c2),
+      particles: {
+        count: d.part.n, color: d.part.c, ring: d.part.ring, dx: d.part.dx, dy: d.part.dy,
+        rMin: d.part.r[0], rMax: d.part.r[1], speedMin: d.part.sp[0], speedMax: d.part.sp[1]
+      }
+    };
+  }
+
+  // Une couche de silhouettes du logo, selon le type de map
+  function paintSilhouette(c, kind, col, base, amp, now, layer) {
+    c.fillStyle = col;
+    if (kind === 'peaks') {
+      for (let i = 0; i < 4; i++) {
+        const x = i * 62 - 14 + layer * 22;
+        const top = base - 34 * amp - (i % 2) * 12;
+        c.beginPath();
+        c.moveTo(x - 40, 120);
+        c.lineTo(x, top);
+        c.lineTo(x + 40, 120);
+        c.closePath();
+        c.fill();
+      }
+    } else if (kind === 'blocks') {
+      for (let i = 0; i < 10; i++) {
+        const h = (18 + ((i * 37 + layer * 17) % 30)) * amp * 1.3;
+        c.fillRect(i * 23 + layer * 9 - 4, 120 - h, 18, h);
+      }
+    } else if (kind === 'stripes') {
+      c.globalAlpha = layer ? 0.9 : 0.5;
+      for (let j = 0; j < 5; j++) {
+        c.fillRect(0, base - 30 + j * 12 + layer * 4, 220, 5 + layer * 2);
+      }
+      c.globalAlpha = 1;
+    } else if (kind === 'dots') {
+      for (let i = 0; i < 7; i++) {
+        const y = base + Math.sin(now / 600 + i + layer) * 3;
+        c.beginPath();
+        c.arc(i * 36 + layer * 14, y, 7 + layer * 4, 0, Math.PI * 2);
+        c.fill();
+      }
+    } else {
+      // collines et vagues : une crête ondulée (les vagues bougent)
+      const phase = kind === 'waves' ? now / 700 : 0;
+      c.beginPath();
+      c.moveTo(0, 120);
+      for (let x = 0; x <= 220; x += 6) {
+        const y = base - Math.sin(x / (30 + layer * 12) + layer * 2 + phase) * 12 * amp - 6 * amp;
+        c.lineTo(x, y);
+      }
+      c.lineTo(220, 120);
+      c.closePath();
+      c.fill();
+    }
+  }
+
+  // Logo d'une map de la rotation, dans une zone de 220 x 120
+  function paintThemeLogo(c, now, L) {
+    const g = c.createLinearGradient(0, 0, 0, 120);
+    g.addColorStop(0, L.bg[0]);
+    g.addColorStop(1, L.bg[1]);
+    c.fillStyle = g;
+    c.fillRect(0, 0, 220, 120);
+    c.fillStyle = L.sun;
+    c.beginPath();
+    c.arc(170, 28, 13, 0, Math.PI * 2);
+    c.fill();
+    paintSilhouette(c, L.kind, L.fg2, 62, 0.5, now, 0);
+    paintSilhouette(c, L.kind, L.fg, 88, 0.8, now, 1);
+    // particules qui montent ou tombent
+    c.fillStyle = L.pc;
+    for (let i = 0; i < 6; i++) {
+      const x = (i * 37 + 10) % 220;
+      const y = ((((now / (30 + i * 4)) * L.pd + i * 23) % 130) + 130) % 130 - 5;
+      c.beginPath();
+      c.arc(x, y, 1.6 + (i % 3) * 0.6, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  // 45 maps de plus : nature, espace, nourriture, livres et villes du monde
+  const THEME_DATA = [
+    { id: 'jungle', name: 'Jungle', sky: ['#14532d', '#166534', '#052e16'], logo: { bg: ['#4ade80', '#14532d'], fg: '#052e16', fg2: '#166534', sun: '#fde047', kind: 'hills', pc: '#bef264', pd: 1 }, tex: { s: ['rgba(5, 46, 22, 0.4)', 'rgba(163, 230, 53, 0.08)'], n: 220, r: [3, 12], line: null }, ray: ['#d9f99d', 0.05], cur: ['rgba(190, 242, 100, 0.08)', '#bef264'], obs: 34, rock: { f: '#166534', e: '#052e16', w: 4, d: 'canopy', c2: '#a3e635' }, dec: { k: 'palm', c1: '#15803d', c2: '', h: [30, 50], n: 50 }, part: { n: 60, c: 'rgba(190, 242, 100, 0.55)', ring: false, dx: 0.3, dy: 0.6, r: [1.5, 3], sp: [15, 35] } },
+    { id: 'marecage', name: 'Marécage', sky: ['#4d7c0f', '#365314', '#1a2e05'], logo: { bg: ['#a3e635', '#365314'], fg: '#1a2e05', fg2: '#3f6212', sun: '#fef08a', kind: 'waves', pc: '#d9f99d', pd: -1 }, tex: { s: ['rgba(26, 46, 5, 0.35)', 'rgba(190, 242, 100, 0.10)'], n: 260, r: [2, 9], line: null }, ray: ['#ecfccb', 0.04], cur: ['rgba(217, 249, 157, 0.07)', '#d9f99d'], obs: 30, rock: { f: '#3f6212', e: '#1a2e05', w: 3, d: 'dots', c2: '#84cc16' }, dec: { k: 'blade', c1: '#65a30d', c2: '', h: [20, 40], n: 80 }, part: { n: 50, c: 'rgba(217, 249, 157, 0.45)', ring: true, dx: 0, dy: -1, r: [2, 4], sp: [10, 30] } },
+    { id: 'savane', name: 'Savane', sky: ['#65a30d', '#ca8a04', '#713f12'], logo: { bg: ['#bef264', '#eab308'], fg: '#92400e', fg2: '#b45309', sun: '#fff7ed', kind: 'hills', pc: '#fef3c7', pd: 1 }, tex: { s: ['rgba(120, 53, 15, 0.15)', 'rgba(254, 240, 138, 0.18)'], n: 240, r: [0.8, 2.4], line: null }, ray: ['#fef9c3', 0.08], cur: ['rgba(254, 240, 138, 0.09)', '#fde68a'], obs: 20, rock: { f: '#78350f', e: '#fbbf24', w: 3, d: 'strata' }, dec: { k: 'mound', c1: '#b45309', c2: '#fcd34d', h: [10, 18], n: 70 }, part: { n: 70, c: 'rgba(254, 240, 138, 0.5)', ring: false, dx: 1, dy: 0.2, r: [0.8, 1.6], sp: [50, 90] } },
+    { id: 'toundra', name: 'Toundra', sky: ['#d1fae5', '#6b7c75', '#2f3e36'], logo: { bg: ['#ecfdf5', '#6b7c75'], fg: '#44403c', fg2: '#78716c', sun: '#f5f5f4', kind: 'peaks', pc: '#ffffff', pd: 1 }, tex: { s: ['rgba(255, 255, 255, 0.12)', 'rgba(47, 62, 54, 0.25)'], n: 200, r: [1, 4], line: null }, ray: ['#f5f5f4', 0.05], cur: ['rgba(231, 229, 228, 0.07)', '#e7e5e4'], obs: 22, rock: { f: '#57534e', e: '#d6d3d1', w: 3, d: 'cracks', c2: '#a8a29e' }, dec: { k: 'mound', c1: '#4d7c0f', c2: '#a3e635', h: [8, 14], n: 60 }, part: { n: 50, c: 'rgba(255, 255, 255, 0.6)', ring: false, dx: 0.4, dy: 0.8, r: [1, 2.5], sp: [20, 40] } },
+    { id: 'montagne', name: 'Montagne', sky: ['#38bdf8', '#475569', '#1e293b'], logo: { bg: ['#7dd3fc', '#475569'], fg: '#334155', fg2: '#475569', sun: '#f1f5f9', kind: 'peaks', pc: '#ffffff', pd: 1 }, tex: { s: ['rgba(255, 255, 255, 0.10)', 'rgba(15, 23, 42, 0.25)'], n: 200, r: [1, 5], line: 'rgba(255, 255, 255, 0.12)' }, ray: ['#e2e8f0', 0.05], cur: ['rgba(203, 213, 225, 0.08)', '#cbd5e1'], obs: 30, rock: { f: '#64748b', e: '#e2e8f0', w: 3, d: 'cracks', c2: '#94a3b8' }, dec: { k: 'spike', c1: '#e2e8f0', c2: '#ffffff', h: [14, 26], n: 60 }, part: { n: 60, c: 'rgba(255, 255, 255, 0.5)', ring: false, dx: 0.2, dy: 1, r: [1, 2.2], sp: [25, 50] } },
+    { id: 'ciel', name: 'Ciel', sky: ['#7dd3fc', '#bae6fd', '#e0f2fe'], logo: { bg: ['#38bdf8', '#e0f2fe'], fg: '#ffffff', fg2: '#f8fafc', sun: '#fde047', kind: 'hills', pc: '#ffffff', pd: 1 }, tex: { s: ['rgba(255, 255, 255, 0.35)', 'rgba(14, 165, 233, 0.08)'], n: 180, r: [6, 18], line: null }, ray: ['#ffffff', 0.12], cur: ['rgba(255, 255, 255, 0.12)', '#ffffff'], obs: 26, rock: { f: 'rgba(255, 255, 255, 0.85)', e: 'rgba(125, 211, 252, 0.9)', w: 3, d: 'shine' }, dec: { k: 'pulse', c1: '#fde047', c2: '#fef9c3', h: [10, 16], n: 30 }, part: { n: 60, c: 'rgba(255, 255, 255, 0.8)', ring: false, dx: -0.3, dy: 0, r: [4, 9], sp: [5, 12] } },
+    { id: 'caverne', name: 'Caverne', sky: ['#1e1b4b', '#312e81', '#0f0a2e'], logo: { bg: ['#312e81', '#0f0a2e'], fg: '#1e1b4b', fg2: '#3730a3', sun: '#c4b5fd', kind: 'peaks', pc: '#a5b4fc', pd: -1 }, tex: { s: ['rgba(129, 140, 248, 0.10)', 'rgba(0, 0, 0, 0.3)'], n: 200, r: [1, 4], line: null }, ray: ['#a5b4fc', 0.04], cur: ['rgba(165, 180, 252, 0.07)', '#a5b4fc'], obs: 30, rock: { f: '#312e81', e: '#818cf8', w: 3, d: 'rings', c2: '#a5b4fc' }, dec: { k: 'crystal', c1: '', c2: '', h: [16, 28], n: 60 }, part: { n: 50, c: 'rgba(165, 180, 252, 0.5)', ring: false, dx: 0, dy: -0.4, r: [1, 2.2], sp: [10, 25] } },
+    { id: 'corail', name: 'Lagon de corail', sky: ['#22d3ee', '#0891b2', '#164e63'], logo: { bg: ['#67e8f9', '#0e7490'], fg: '#0e7490', fg2: '#155e75', sun: '#fef08a', kind: 'waves', pc: '#ffffff', pd: -1 }, tex: { s: ['rgba(255, 255, 255, 0.12)', 'rgba(8, 145, 178, 0.15)'], n: 240, r: [1, 4], line: 'rgba(255, 255, 255, 0.08)' }, ray: ['#cffafe', 0.07], cur: ['rgba(165, 243, 252, 0.08)', '#a5f3fc'], obs: 24, rock: { f: '#db2777', e: '#fbcfe8', w: 3, d: 'dots', c2: '#fde68a' }, dec: { k: 'mound', c1: '#fb7185', c2: '#fecdd3', h: [12, 22], n: 70 }, part: { n: 60, c: 'rgba(207, 250, 254, 0.5)', ring: true, dx: 0, dy: -1, r: [2, 5], sp: [15, 40] } },
+    { id: 'delta', name: 'Delta du fleuve', sky: ['#65a30d', '#0f766e', '#134e4a'], logo: { bg: ['#5eead4', '#134e4a'], fg: '#115e59', fg2: '#0f766e', sun: '#fef9c3', kind: 'hills', pc: '#ccfbf1', pd: 1 }, tex: { s: ['rgba(204, 251, 241, 0.12)', 'rgba(19, 78, 74, 0.2)'], n: 200, r: [2, 6], line: 'rgba(204, 251, 241, 0.10)' }, ray: ['#ccfbf1', 0.05], cur: ['rgba(94, 234, 212, 0.10)', '#5eead4'], obs: 24, rock: { f: '#166534', e: '#4ade80', w: 3, d: 'reef' }, dec: { k: 'grass', c1: '', c2: '', h: [18, 30], n: 70 }, part: { n: 60, c: 'rgba(204, 251, 241, 0.45)', ring: false, dx: 0.5, dy: 0.1, r: [1, 2.5], sp: [30, 60] } },
+    { id: 'bambou', name: 'Bambou', sky: ['#bbf7d0', '#4ade80', '#166534'], logo: { bg: ['#dcfce7', '#4ade80'], fg: '#166534', fg2: '#15803d', sun: '#f0fdf4', kind: 'stripes', pc: '#86efac', pd: 1 }, tex: { s: ['rgba(22, 101, 52, 0.18)', 'rgba(255, 255, 255, 0.12)'], n: 200, r: [2, 7], line: 'rgba(22, 101, 52, 0.12)' }, ray: ['#f0fdf4', 0.06], cur: ['rgba(187, 247, 208, 0.08)', '#bbf7d0'], obs: 36, rock: { f: '#15803d', e: '#dcfce7', w: 3, d: 'rings', c2: '#86efac' }, dec: { k: 'blade', c1: '#16a34a', c2: '', h: [40, 80], n: 60 }, part: { n: 50, c: 'rgba(240, 253, 244, 0.6)', ring: false, dx: 0.4, dy: 0.7, r: [1.5, 2.5], sp: [20, 40] } },
+    { id: 'cerisiers', name: 'Cerisiers en fleur', sky: ['#fbcfe8', '#f9a8d4', '#be185d'], logo: { bg: ['#fce7f3', '#f9a8d4'], fg: '#be185d', fg2: '#f472b6', sun: '#fff1f2', kind: 'peaks', pc: '#fbcfe8', pd: 1 }, tex: { s: ['rgba(255, 241, 242, 0.35)', 'rgba(190, 24, 93, 0.10)'], n: 220, r: [2, 6], line: null }, ray: ['#fff1f2', 0.07], cur: ['rgba(252, 231, 243, 0.10)', '#fbcfe8'], obs: 26, rock: { f: '#9d174d', e: '#fbcfe8', w: 3, d: 'dots', c2: '#fbcfe8' }, dec: { k: 'flower', c1: '#fda4af', c2: '#fff1f2', h: [10, 16], n: 70 }, part: { n: 80, c: 'rgba(253, 164, 175, 0.7)', ring: false, dx: 0.3, dy: 0.5, r: [2, 3.5], sp: [12, 28] } },
+    { id: 'automne', name: 'Automne', sky: ['#dc2626', '#9a3412', '#451a03'], logo: { bg: ['#fb923c', '#9a3412'], fg: '#7c2d12', fg2: '#b45309', sun: '#fef3c7', kind: 'hills', pc: '#fb923c', pd: 1 }, tex: { s: ['rgba(124, 45, 18, 0.18)', 'rgba(253, 186, 116, 0.14)'], n: 230, r: [2, 7], line: null }, ray: ['#fed7aa', 0.06], cur: ['rgba(253, 186, 116, 0.09)', '#fdba74'], obs: 28, rock: { f: '#9a3412', e: '#fdba74', w: 3, d: 'canopy', c2: '#fb923c' }, dec: { k: 'mound', c1: '#dc2626', c2: '#fca5a5', h: [9, 14], n: 80 }, part: { n: 70, c: 'rgba(251, 146, 60, 0.7)', ring: false, dx: 0.6, dy: 0.5, r: [2, 3.5], sp: [15, 30] } },
+    { id: 'printemps', name: 'Printemps pastel', sky: ['#d9f99d', '#bef264', '#86efac'], logo: { bg: ['#ecfccb', '#bbf7d0'], fg: '#86efac', fg2: '#4ade80', sun: '#fef9c3', kind: 'dots', pc: '#f9a8d4', pd: 1 }, tex: { s: ['rgba(255, 255, 255, 0.25)', 'rgba(134, 239, 172, 0.15)'], n: 200, r: [3, 9], line: null }, ray: ['#ffffff', 0.07], cur: ['rgba(254, 249, 195, 0.09)', '#fef08a'], obs: 24, rock: { f: '#f9a8d4', e: '#ffffff', w: 3, d: 'swirl', c2: '#fbcfe8' }, dec: { k: 'flower', c1: '#f0abfc', c2: '#fef9c3', h: [9, 13], n: 90 }, part: { n: 70, c: 'rgba(249, 168, 212, 0.6)', ring: false, dx: 0.5, dy: 0.3, r: [2, 4], sp: [10, 25] } },
+    { id: 'nuit', name: 'Nuit étoilée', sky: ['#0f172a', '#1e1b4b', '#020617'], logo: { bg: ['#1e1b4b', '#020617'], fg: '#312e81', fg2: '#1e3a8a', sun: '#fef9c3', kind: 'peaks', pc: '#fef9c3', pd: 1 }, tex: { s: ['rgba(254, 249, 195, 0.5)', 'rgba(99, 102, 241, 0.08)'], n: 160, r: [0.5, 1.8], line: null }, ray: ['#c7d2fe', 0.03], cur: ['rgba(129, 140, 248, 0.06)', '#818cf8'], obs: 22, rock: { f: '#1e1b4b', e: '#6366f1', w: 3, d: 'rings', c2: '#818cf8' }, dec: { k: 'star', c1: '#fef9c3', c2: '', h: [6, 12], n: 90 }, part: { n: 40, c: 'rgba(254, 249, 195, 0.5)', ring: false, dx: 0, dy: 0, r: [0.8, 1.8], sp: [0, 0] } },
+    { id: 'espace', name: 'Espace', sky: ['#4c1d95', '#7e22ce', '#1e1b4b'], logo: { bg: ['#312e81', '#0c0a1d'], fg: '#4c1d95', fg2: '#6d28d9', sun: '#f472b6', kind: 'dots', pc: '#e9d5ff', pd: 1 }, tex: { s: ['rgba(233, 213, 255, 0.45)', 'rgba(147, 51, 234, 0.08)'], n: 180, r: [0.5, 2], line: null }, ray: ['#e9d5ff', 0.03], cur: ['rgba(216, 180, 254, 0.07)', '#d8b4fe'], obs: 24, rock: { f: '#4c1d95', e: '#c084fc', w: 3, d: 'shine' }, dec: { k: 'pulse', c1: '#c084fc', c2: '#f0abfc', h: [12, 20], n: 40 }, part: { n: 70, c: 'rgba(233, 213, 255, 0.6)', ring: false, dx: 0, dy: 0.1, r: [0.6, 1.6], sp: [10, 30] } },
+    { id: 'mars', name: 'Mars', sky: ['#fb923c', '#c2410c', '#7c2d12'], logo: { bg: ['#fdba74', '#9a3412'], fg: '#7c2d12', fg2: '#9a3412', sun: '#e0f2fe', kind: 'hills', pc: '#fdba74', pd: 1 }, tex: { s: ['rgba(124, 45, 18, 0.25)', 'rgba(254, 215, 170, 0.12)'], n: 240, r: [1, 5], line: null }, ray: ['#ffedd5', 0.05], cur: ['rgba(251, 146, 60, 0.08)', '#fb923c'], obs: 30, rock: { f: '#7c2d12', e: '#fb923c', w: 3, d: 'cracks', c2: '#431407' }, dec: { k: 'spike', c1: '#9a3412', c2: '#fdba74', h: [8, 16], n: 50 }, part: { n: 50, c: 'rgba(254, 215, 170, 0.5)', ring: false, dx: 0.8, dy: 0, r: [0.8, 2], sp: [30, 70] } },
+    { id: 'aurore', name: 'Aurore boréale', sky: ['#064e3b', '#115e59', '#0f172a'], logo: { bg: ['#134e4a', '#0f172a'], fg: '#022c22', fg2: '#0f766e', sun: '#a7f3d0', kind: 'waves', pc: '#5eead4', pd: -1 }, tex: { s: ['rgba(94, 234, 212, 0.12)', 'rgba(2, 44, 34, 0.3)'], n: 180, r: [2, 8], line: 'rgba(94, 234, 212, 0.15)' }, ray: ['#5eead4', 0.06], cur: ['rgba(45, 212, 191, 0.08)', '#2dd4bf'], obs: 22, rock: { f: '#0f766e', e: '#5eead4', w: 3, d: 'shine' }, dec: { k: 'pulse', c1: '#2dd4bf', c2: '#99f6e4', h: [10, 18], n: 35 }, part: { n: 50, c: 'rgba(94, 234, 212, 0.5)', ring: false, dx: 0, dy: -0.3, r: [1, 3], sp: [8, 20] } },
+    { id: 'bonbons', name: 'Bonbons', sky: ['#f9a8d4', '#c084fc', '#67e8f9'], logo: { bg: ['#fbcfe8', '#a78bfa'], fg: '#f472b6', fg2: '#c084fc', sun: '#fef9c3', kind: 'stripes', pc: '#ffffff', pd: 1 }, tex: { s: ['rgba(255, 255, 255, 0.25)', 'rgba(236, 72, 153, 0.12)', 'rgba(96, 165, 250, 0.12)'], n: 220, r: [3, 8], line: 'rgba(255, 255, 255, 0.2)' }, ray: ['#ffffff', 0.08], cur: ['rgba(249, 168, 212, 0.09)', '#f9a8d4'], obs: 26, rock: { f: '#ec4899', e: '#fdf2f8', w: 4, d: 'swirl', c2: '#fdf2f8' }, dec: { k: 'swirl', c1: '#f472b6', c2: '#ffffff', h: [10, 16], n: 70 }, part: { n: 70, c: 'rgba(255, 255, 255, 0.7)', ring: false, dx: 0.4, dy: 0.4, r: [1.5, 3], sp: [15, 35] } },
+    { id: 'chocolat', name: 'Chocolat', sky: ['#78350f', '#451a03', '#1c0a00'], logo: { bg: ['#92400e', '#451a03'], fg: '#3f1d0b', fg2: '#573215', sun: '#fde68a', kind: 'blocks', pc: '#d97706', pd: 1 }, tex: { s: ['rgba(28, 10, 0, 0.3)', 'rgba(217, 119, 6, 0.10)'], n: 220, r: [2, 6], line: 'rgba(253, 230, 138, 0.08)' }, ray: ['#fde68a', 0.04], cur: ['rgba(180, 83, 9, 0.10)', '#b45309'], obs: 24, rock: { f: '#451a03', e: '#92400e', w: 4, d: 'blocks', c2: '#78350f' }, dec: { k: 'block', c1: '#78350f', c2: '#1c0a00', h: [12, 20], n: 60 }, part: { n: 50, c: 'rgba(253, 230, 138, 0.4)', ring: false, dx: 0, dy: 0.4, r: [1, 2], sp: [10, 25] } },
+    { id: 'fraise', name: 'Fraise', sky: ['#fecdd3', '#fb7185', '#be123c'], logo: { bg: ['#fff1f2', '#fb7185'], fg: '#be123c', fg2: '#e11d48', sun: '#fef3c7', kind: 'dots', pc: '#fda4af', pd: 1 }, tex: { s: ['rgba(255, 255, 255, 0.22)', 'rgba(190, 18, 60, 0.14)'], n: 210, r: [2, 6], line: null }, ray: ['#fff1f2', 0.06], cur: ['rgba(253, 164, 175, 0.09)', '#fda4af'], obs: 24, rock: { f: '#be123c', e: '#fecdd3', w: 3, d: 'dots', c2: '#fecdd3' }, dec: { k: 'mound', c1: '#86efac', c2: '#dcfce7', h: [7, 12], n: 80 }, part: { n: 60, c: 'rgba(255, 241, 242, 0.6)', ring: false, dx: 0.2, dy: 0.5, r: [1.5, 3], sp: [15, 30] } },
+    { id: 'pizza', name: 'Pizza', sky: ['#fde047', '#f97316', '#b91c1c'], logo: { bg: ['#fef08a', '#f97316'], fg: '#b91c1c', fg2: '#ea580c', sun: '#fef9c3', kind: 'dots', pc: '#ef4444', pd: 1 }, tex: { s: ['rgba(185, 28, 28, 0.12)', 'rgba(254, 240, 138, 0.18)'], n: 200, r: [2, 6], line: null }, ray: ['#fef9c3', 0.05], cur: ['rgba(250, 204, 21, 0.09)', '#facc15'], obs: 26, rock: { f: '#f5d0a9', e: '#ea580c', w: 3, d: 'dots', c2: '#dc2626' }, dec: { k: 'mush', c1: '#dc2626', c2: '#fef08a', h: [9, 14], n: 70 }, part: { n: 50, c: 'rgba(254, 240, 138, 0.5)', ring: false, dx: 0, dy: 0.5, r: [1, 2.5], sp: [12, 28] } },
+    { id: 'sushi', name: 'Sushi', sky: ['#f8fafc', '#e2e8f0', '#1e293b'], logo: { bg: ['#ffffff', '#cbd5e1'], fg: '#1e293b', fg2: '#334155', sun: '#fb7185', kind: 'stripes', pc: '#f97316', pd: 1 }, tex: { s: ['rgba(30, 41, 59, 0.10)', 'rgba(255, 255, 255, 0.4)'], n: 200, r: [1, 4], line: null }, ray: ['#ffffff', 0.06], cur: ['rgba(226, 232, 240, 0.10)', '#cbd5e1'], obs: 24, rock: { f: '#1e293b', e: '#f8fafc', w: 3, d: 'swirl', c2: '#f97316' }, dec: { k: 'mound', c1: '#fb7185', c2: '#fecaca', h: [8, 13], n: 70 }, part: { n: 50, c: 'rgba(255, 255, 255, 0.7)', ring: false, dx: 0, dy: 0.3, r: [1, 2], sp: [10, 20] } },
+    { id: 'citron', name: 'Citron', sky: ['#fef9c3', '#facc15', '#854d0e'], logo: { bg: ['#fef08a', '#eab308'], fg: '#65a30d', fg2: '#84cc16', sun: '#fffbeb', kind: 'hills', pc: '#fef08a', pd: 1 }, tex: { s: ['rgba(133, 77, 14, 0.12)', 'rgba(254, 249, 195, 0.25)'], n: 200, r: [2, 6], line: null }, ray: ['#fffbeb', 0.07], cur: ['rgba(253, 224, 71, 0.10)', '#fde047'], obs: 22, rock: { f: '#a16207', e: '#fef08a', w: 3, d: 'rings', c2: '#fde047' }, dec: { k: 'flower', c1: '#fde047', c2: '#65a30d', h: [9, 14], n: 70 }, part: { n: 60, c: 'rgba(254, 249, 195, 0.6)', ring: false, dx: 0.2, dy: 0.2, r: [1.5, 3], sp: [10, 25] } },
+    { id: 'raisin', name: 'Raisin', sky: ['#c4b5fd', '#7c3aed', '#3b0764'], logo: { bg: ['#ddd6fe', '#6d28d9'], fg: '#4c1d95', fg2: '#5b21b6', sun: '#f5f3ff', kind: 'dots', pc: '#a78bfa', pd: 1 }, tex: { s: ['rgba(59, 7, 100, 0.18)', 'rgba(196, 181, 253, 0.12)'], n: 210, r: [2, 6], line: null }, ray: ['#ede9fe', 0.05], cur: ['rgba(167, 139, 250, 0.09)', '#a78bfa'], obs: 26, rock: { f: '#581c87', e: '#c4b5fd', w: 3, d: 'dots', c2: '#a78bfa' }, dec: { k: 'mound', c1: '#7e22ce', c2: '#d8b4fe', h: [8, 13], n: 75 }, part: { n: 55, c: 'rgba(221, 214, 254, 0.5)', ring: false, dx: 0, dy: 0.3, r: [1, 2.5], sp: [10, 22] } },
+    { id: 'cafe', name: 'Café au lait', sky: ['#e7d3b7', '#c8a27a', '#7c5a3c'], logo: { bg: ['#f5e6d3', '#a0522d'], fg: '#3b1d0c', fg2: '#6b3e1f', sun: '#fde68a', kind: 'waves', pc: '#fef3c7', pd: -1 }, tex: { s: ['rgba(59, 29, 12, 0.2)', 'rgba(245, 230, 211, 0.12)'], n: 220, r: [1, 5], line: 'rgba(245, 230, 211, 0.10)' }, ray: ['#fef3c7', 0.05], cur: ['rgba(214, 167, 122, 0.10)', '#d6a77a'], obs: 24, rock: { f: '#5c3317', e: '#d6a77a', w: 3, d: 'rings', c2: '#a0522d' }, dec: { k: 'swirl', c1: '#8b5a2b', c2: '#f5e6d3', h: [10, 16], n: 60 }, part: { n: 60, c: 'rgba(254, 243, 199, 0.5)', ring: true, dx: 0, dy: -1, r: [1.5, 3.5], sp: [15, 35] } },
+    { id: 'patisserie', name: 'Pâtisserie', sky: ['#fdf2f8', '#fbcfe8', '#f0abfc'], logo: { bg: ['#fdf4ff', '#f5d0fe'], fg: '#f0abfc', fg2: '#e879f9', sun: '#fef9c3', kind: 'stripes', pc: '#fbcfe8', pd: 1 }, tex: { s: ['rgba(232, 121, 249, 0.15)', 'rgba(255, 255, 255, 0.3)'], n: 200, r: [2, 6], line: 'rgba(232, 121, 249, 0.12)' }, ray: ['#ffffff', 0.07], cur: ['rgba(240, 171, 252, 0.09)', '#f0abfc'], obs: 24, rock: { f: '#f9a8d4', e: '#fdf4ff', w: 4, d: 'swirl', c2: '#fdf4ff' }, dec: { k: 'swirl', c1: '#fb7185', c2: '#fff1f2', h: [9, 14], n: 70 }, part: { n: 60, c: 'rgba(255, 255, 255, 0.7)', ring: false, dx: 0.3, dy: 0.3, r: [1.5, 3], sp: [12, 28] } },
+    { id: 'bibliotheque', name: 'Bibliothèque', sky: ['#065f46', '#064e3b', '#022c22'], logo: { bg: ['#047857', '#022c22'], fg: '#064e3b', fg2: '#065f46', sun: '#fde68a', kind: 'blocks', pc: '#fcd34d', pd: 1 }, tex: { s: ['rgba(2, 44, 34, 0.25)', 'rgba(253, 230, 138, 0.08)'], n: 200, r: [1, 4], line: 'rgba(253, 230, 138, 0.10)' }, ray: ['#fde68a', 0.05], cur: ['rgba(52, 211, 153, 0.08)', '#34d399'], obs: 30, rock: { f: '#78350f', e: '#fbbf24', w: 3, d: 'blocks', c2: '#fbbf24' }, dec: { k: 'block', c1: '#7c2d12', c2: '#3b1d0c', h: [14, 22], n: 50 }, part: { n: 40, c: 'rgba(253, 230, 138, 0.4)', ring: false, dx: 0, dy: 0, r: [1, 2], sp: [0, 0] } },
+    { id: 'parchemin', name: 'Parchemin', sky: ['#fef3c7', '#fcd34d', '#a16207'], logo: { bg: ['#fef9c3', '#fcd34d'], fg: '#a16207', fg2: '#ca8a04', sun: '#fffbeb', kind: 'stripes', pc: '#92400e', pd: 1 }, tex: { s: ['rgba(146, 64, 14, 0.12)', 'rgba(255, 251, 235, 0.2)'], n: 220, r: [1, 4], line: 'rgba(146, 64, 14, 0.12)' }, ray: ['#fffbeb', 0.05], cur: ['rgba(252, 211, 77, 0.08)', '#fcd34d'], obs: 24, rock: { f: '#92400e', e: '#fcd34d', w: 3, d: 'cracks', c2: '#a16207' }, dec: { k: 'block', c1: '#d6b370', c2: '#a16207', h: [10, 16], n: 50 }, part: { n: 40, c: 'rgba(146, 64, 14, 0.3)', ring: false, dx: 0.5, dy: 0, r: [1, 2], sp: [10, 20] } },
+    { id: 'bd', name: 'BD pop art', sky: ['#fde047', '#ef4444', '#1d4ed8'], logo: { bg: ['#facc15', '#dc2626'], fg: '#1d4ed8', fg2: '#2563eb', sun: '#ffffff', kind: 'stripes', pc: '#ffffff', pd: 1 }, tex: { s: ['rgba(29, 78, 216, 0.15)', 'rgba(254, 240, 138, 0.25)'], n: 200, r: [2, 7], line: null }, ray: ['#ffffff', 0.06], cur: ['rgba(250, 204, 21, 0.09)', '#facc15'], obs: 26, rock: { f: '#1d4ed8', e: '#fde047', w: 5, d: 'dots', c2: '#fde047' }, dec: { k: 'star', c1: '#fde047', c2: '', h: [9, 15], n: 70 }, part: { n: 50, c: 'rgba(255, 255, 255, 0.7)', ring: false, dx: 0, dy: 0.5, r: [2, 3], sp: [10, 25] } },
+    { id: 'conte', name: 'Conte de fées', sky: ['#fbcfe8', '#a5b4fc', '#4338ca'], logo: { bg: ['#fce7f3', '#818cf8'], fg: '#4338ca', fg2: '#6366f1', sun: '#fef08a', kind: 'peaks', pc: '#fef08a', pd: 1 }, tex: { s: ['rgba(250, 232, 255, 0.18)', 'rgba(67, 56, 202, 0.15)'], n: 200, r: [1, 5], line: null }, ray: ['#fae8ff', 0.06], cur: ['rgba(232, 121, 249, 0.08)', '#e879f9'], obs: 26, rock: { f: '#3730a3', e: '#f0abfc', w: 3, d: 'swirl', c2: '#f0abfc' }, dec: { k: 'flower', c1: '#e879f9', c2: '#fef08a', h: [9, 14], n: 70 }, part: { n: 70, c: 'rgba(254, 240, 138, 0.6)', ring: false, dx: 0.1, dy: -0.4, r: [1, 2.5], sp: [12, 30] } },
+    { id: 'manuscrit', name: 'Manuscrit doré', sky: ['#1e3a8a', '#1e40af', '#172554'], logo: { bg: ['#3b82f6', '#172554'], fg: '#172554', fg2: '#1e3a8a', sun: '#fde047', kind: 'stripes', pc: '#fde047', pd: -1 }, tex: { s: ['rgba(253, 224, 71, 0.12)', 'rgba(23, 37, 84, 0.2)'], n: 200, r: [1, 4], line: 'rgba(253, 224, 71, 0.12)' }, ray: ['#fef9c3', 0.06], cur: ['rgba(250, 204, 21, 0.08)', '#fde047'], obs: 24, rock: { f: '#854d0e', e: '#fde047', w: 3, d: 'rings', c2: '#fde047' }, dec: { k: 'star', c1: '#fde047', c2: '', h: [8, 12], n: 60 }, part: { n: 50, c: 'rgba(253, 224, 71, 0.6)', ring: false, dx: 0, dy: -0.5, r: [1, 2], sp: [10, 25] } },
+    { id: 'cirque', name: 'Cirque', sky: ['#ef4444', '#fef2f2', '#1e3a8a'], logo: { bg: ['#fca5a5', '#1e3a8a'], fg: '#1e3a8a', fg2: '#dc2626', sun: '#fde047', kind: 'stripes', pc: '#fef2f2', pd: 1 }, tex: { s: ['rgba(30, 58, 138, 0.15)', 'rgba(254, 242, 242, 0.25)'], n: 200, r: [2, 6], line: null }, ray: ['#fef2f2', 0.05], cur: ['rgba(254, 226, 226, 0.08)', '#fecaca'], obs: 24, rock: { f: '#1e3a8a', e: '#fef2f2', w: 3, d: 'rings', c2: '#ef4444' }, dec: { k: 'star', c1: '#fde047', c2: '', h: [9, 14], n: 60 }, part: { n: 50, c: 'rgba(254, 242, 242, 0.6)', ring: false, dx: 0.3, dy: 0, r: [1.5, 3], sp: [20, 40] } },
+    { id: 'partition', name: 'Partition musicale', sky: ['#f1f5f9', '#cbd5e1', '#334155'], logo: { bg: ['#f8fafc', '#e2e8f0'], fg: '#334155', fg2: '#475569', sun: '#0f172a', kind: 'stripes', pc: '#1e293b', pd: 1 }, tex: { s: ['rgba(51, 65, 85, 0.12)', 'rgba(255, 255, 255, 0.3)'], n: 200, r: [1, 3], line: 'rgba(51, 65, 85, 0.15)' }, ray: ['#ffffff', 0.05], cur: ['rgba(203, 213, 225, 0.09)', '#cbd5e1'], obs: 22, rock: { f: '#334155', e: '#e2e8f0', w: 3, d: 'cracks', c2: '#94a3b8' }, dec: { k: 'mound', c1: '#1e293b', c2: '#94a3b8', h: [8, 13], n: 60 }, part: { n: 50, c: 'rgba(30, 41, 59, 0.4)', ring: false, dx: 0, dy: 0.3, r: [1, 2], sp: [10, 25] } },
+    { id: 'carnaval', name: 'Carnaval', sky: ['#ec4899', '#7c3aed', '#0e7490'], logo: { bg: ['#f472b6', '#6d28d9'], fg: '#be185d', fg2: '#1d4ed8', sun: '#fde047', kind: 'dots', pc: '#fde047', pd: 1 }, tex: { s: ['rgba(253, 224, 71, 0.18)', 'rgba(14, 116, 144, 0.12)', 'rgba(236, 72, 153, 0.12)'], n: 240, r: [2, 6], line: null }, ray: ['#fdf4ff', 0.05], cur: ['rgba(244, 114, 182, 0.09)', '#f472b6'], obs: 26, rock: { f: '#7c3aed', e: '#fde047', w: 4, d: 'dots', c2: '#fde047' }, dec: { k: 'star', c1: '#facc15', c2: '', h: [9, 15], n: 80 }, part: { n: 70, c: 'rgba(253, 224, 71, 0.6)', ring: false, dx: 0.2, dy: 0.5, r: [1.5, 3], sp: [15, 35] } },
+    { id: 'cinema', name: 'Cinéma', sky: ['#1f2937', '#111827', '#030712'], logo: { bg: ['#374151', '#111827'], fg: '#0f172a', fg2: '#1e293b', sun: '#fbbf24', kind: 'blocks', pc: '#fde68a', pd: -1 }, tex: { s: ['rgba(251, 191, 36, 0.12)', 'rgba(0, 0, 0, 0.3)'], n: 180, r: [1, 3], line: null }, ray: ['#fde68a', 0.04], cur: ['rgba(156, 163, 175, 0.07)', '#9ca3af'], obs: 22, rock: { f: '#111827', e: '#fbbf24', w: 3, d: 'blocks', c2: '#374151' }, dec: { k: 'pulse', c1: '#fbbf24', c2: '#fde68a', h: [8, 12], n: 40 }, part: { n: 50, c: 'rgba(253, 230, 138, 0.5)', ring: false, dx: 0, dy: 0, r: [0.8, 1.8], sp: [0, 0] } },
+    { id: 'jeuxvideo', name: 'Jeux vidéo', sky: ['#0f172a', '#4c1d95', '#0e7490'], logo: { bg: ['#1e1b4b', '#0e7490'], fg: '#22d3ee', fg2: '#a855f7', sun: '#f0abfc', kind: 'blocks', pc: '#22d3ee', pd: 1 }, tex: { s: ['rgba(34, 211, 238, 0.10)', 'rgba(168, 85, 247, 0.12)'], n: 200, r: [2, 6], line: 'rgba(34, 211, 238, 0.10)' }, ray: ['#22d3ee', 0.04], cur: ['rgba(168, 85, 247, 0.09)', '#a855f7'], obs: 30, rock: { f: '#0f172a', e: '#22d3ee', w: 3, d: 'blocks', c2: '#a855f7' }, dec: { k: 'block', c1: '#a855f7', c2: '#0f172a', h: [10, 18], n: 55 }, part: { n: 60, c: 'rgba(34, 211, 238, 0.6)', ring: false, dx: 0, dy: 0.6, r: [1, 2.5], sp: [15, 35] } },
+    { id: 'paris', name: 'Paris', sky: ['#94a3b8', '#312e81', '#0f172a'], logo: { bg: ['#cbd5e1', '#1e293b'], fg: '#1e293b', fg2: '#334155', sun: '#fde68a', kind: 'blocks', pc: '#e2e8f0', pd: 1 }, tex: { s: ['rgba(226, 232, 240, 0.12)', 'rgba(15, 23, 42, 0.25)'], n: 200, r: [1, 4], line: null }, ray: ['#e2e8f0', 0.05], cur: ['rgba(148, 163, 184, 0.08)', '#94a3b8'], obs: 26, rock: { f: '#475569', e: '#cbd5e1', w: 3, d: 'blocks', c2: '#64748b' }, dec: { k: 'block', c1: '#94a3b8', c2: '#1e293b', h: [11, 17], n: 70 }, part: { n: 50, c: 'rgba(226, 232, 240, 0.4)', ring: false, dx: 0, dy: 0.2, r: [1, 2], sp: [8, 20] } },
+    { id: 'newyork', name: 'New York', sky: ['#38bdf8', '#1d4ed8', '#1e3a8a'], logo: { bg: ['#7dd3fc', '#1e3a8a'], fg: '#0f172a', fg2: '#1e3a8a', sun: '#fde047', kind: 'blocks', pc: '#fde047', pd: 1 }, tex: { s: ['rgba(147, 197, 253, 0.10)', 'rgba(15, 23, 42, 0.3)'], n: 220, r: [1, 3], line: 'rgba(147, 197, 253, 0.08)' }, ray: ['#bfdbfe', 0.04], cur: ['rgba(96, 165, 250, 0.08)', '#60a5fa'], obs: 32, rock: { f: '#1e293b', e: '#60a5fa', w: 3, d: 'blocks', c2: '#3b82f6' }, dec: { k: 'block', c1: '#334155', c2: '#0f172a', h: [12, 22], n: 70 }, part: { n: 40, c: 'rgba(253, 230, 138, 0.5)', ring: false, dx: 0, dy: 0.4, r: [1, 2], sp: [10, 25] } },
+    { id: 'tokyo', name: 'Tokyo', sky: ['#be185d', '#4c1d95', '#0f0a1e'], logo: { bg: ['#7c3aed', '#0f0a1e'], fg: '#1e1b4b', fg2: '#312e81', sun: '#f472b6', kind: 'blocks', pc: '#f0abfc', pd: 1 }, tex: { s: ['rgba(244, 114, 182, 0.12)', 'rgba(15, 10, 30, 0.3)'], n: 200, r: [1, 4], line: null }, ray: ['#f5d0fe', 0.05], cur: ['rgba(232, 121, 249, 0.09)', '#e879f9'], obs: 28, rock: { f: '#1e1b4b', e: '#f472b6', w: 3, d: 'rings', c2: '#e879f9' }, dec: { k: 'pulse', c1: '#f472b6', c2: '#67e8f9', h: [9, 15], n: 55 }, part: { n: 60, c: 'rgba(240, 171, 252, 0.5)', ring: false, dx: 0, dy: 0.5, r: [1, 2.2], sp: [15, 35] } },
+    { id: 'caire', name: 'Le Caire', sky: ['#7dd3fc', '#fde68a', '#b45309'], logo: { bg: ['#bae6fd', '#d97706'], fg: '#92400e', fg2: '#b45309', sun: '#fff7ed', kind: 'peaks', pc: '#fde68a', pd: 1 }, tex: { s: ['rgba(146, 64, 14, 0.14)', 'rgba(254, 243, 199, 0.15)'], n: 230, r: [0.8, 2.5], line: null }, ray: ['#fef3c7', 0.07], cur: ['rgba(252, 211, 77, 0.08)', '#fcd34d'], obs: 20, rock: { f: '#a16207', e: '#fde68a', w: 3, d: 'strata' }, dec: { k: 'block', c1: '#b45309', c2: '#78350f', h: [12, 18], n: 45 }, part: { n: 60, c: 'rgba(254, 243, 199, 0.45)', ring: false, dx: 1, dy: 0.1, r: [0.8, 1.6], sp: [40, 80] } },
+    { id: 'venise', name: 'Venise', sky: ['#f472b6', '#0ea5e9', '#0c4a6e'], logo: { bg: ['#fbcfe8', '#0284c7'], fg: '#075985', fg2: '#0369a1', sun: '#fef08a', kind: 'waves', pc: '#e0f2fe', pd: 1 }, tex: { s: ['rgba(224, 242, 254, 0.12)', 'rgba(12, 74, 110, 0.22)'], n: 200, r: [1, 4], line: 'rgba(224, 242, 254, 0.10)' }, ray: ['#fce7f3', 0.06], cur: ['rgba(125, 211, 252, 0.08)', '#7dd3fc'], obs: 26, rock: { f: '#0369a1', e: '#bae6fd', w: 3, d: 'rings', c2: '#7dd3fc' }, dec: { k: 'mound', c1: '#be123c', c2: '#fecdd3', h: [10, 16], n: 55 }, part: { n: 50, c: 'rgba(224, 242, 254, 0.5)', ring: true, dx: 0, dy: -1, r: [1.5, 3], sp: [10, 25] } },
+    { id: 'rio', name: 'Rio de Janeiro', sky: ['#22c55e', '#eab308', '#0284c7'], logo: { bg: ['#fde047', '#16a34a'], fg: '#15803d', fg2: '#166534', sun: '#fef08a', kind: 'peaks', pc: '#fef08a', pd: 1 }, tex: { s: ['rgba(21, 128, 61, 0.12)', 'rgba(253, 224, 71, 0.15)'], n: 200, r: [2, 6], line: null }, ray: ['#fef9c3', 0.06], cur: ['rgba(250, 204, 21, 0.08)', '#facc15'], obs: 24, rock: { f: '#166534', e: '#fde047', w: 3, d: 'canopy', c2: '#4ade80' }, dec: { k: 'palm', c1: '#15803d', c2: '', h: [24, 40], n: 45 }, part: { n: 50, c: 'rgba(254, 249, 195, 0.6)', ring: false, dx: 0.4, dy: 0.2, r: [1, 2.5], sp: [15, 30] } },
+    { id: 'londres', name: 'Londres', sky: ['#e2e8f0', '#94a3b8', '#475569'], logo: { bg: ['#e2e8f0', '#475569'], fg: '#7f1d1d', fg2: '#991b1b', sun: '#e5e7eb', kind: 'blocks', pc: '#e5e7eb', pd: 1 }, tex: { s: ['rgba(229, 231, 235, 0.12)', 'rgba(71, 85, 105, 0.3)'], n: 220, r: [2, 7], line: null }, ray: ['#e5e7eb', 0.04], cur: ['rgba(203, 213, 225, 0.08)', '#cbd5e1'], obs: 26, rock: { f: '#991b1b', e: '#d1d5db', w: 3, d: 'blocks', c2: '#7f1d1d' }, dec: { k: 'block', c1: '#dc2626', c2: '#450a0a', h: [10, 16], n: 60 }, part: { n: 60, c: 'rgba(229, 231, 235, 0.5)', ring: false, dx: 0.2, dy: 0.1, r: [2, 5], sp: [5, 12] } },
+    { id: 'moscou', name: 'Moscou', sky: ['#1d4ed8', '#7f1d1d', '#172554'], logo: { bg: ['#60a5fa', '#1e3a8a'], fg: '#7f1d1d', fg2: '#991b1b', sun: '#fde047', kind: 'peaks', pc: '#fde047', pd: 1 }, tex: { s: ['rgba(253, 224, 71, 0.12)', 'rgba(30, 58, 138, 0.2)'], n: 200, r: [1, 4], line: null }, ray: ['#dbeafe', 0.05], cur: ['rgba(96, 165, 250, 0.08)', '#60a5fa'], obs: 26, rock: { f: '#1e3a8a', e: '#fde047', w: 3, d: 'rings', c2: '#fde047' }, dec: { k: 'mush', c1: '#16a34a', c2: '#fde047', h: [10, 15], n: 50 }, part: { n: 40, c: 'rgba(254, 249, 195, 0.5)', ring: false, dx: 0.1, dy: 1, r: [1, 2.5], sp: [10, 25] } },
+    { id: 'marrakech', name: 'Marrakech', sky: ['#f97316', '#be123c', '#4a044e'], logo: { bg: ['#fb923c', '#be123c'], fg: '#4a044e', fg2: '#701a75', sun: '#fef08a', kind: 'hills', pc: '#fef08a', pd: 1 }, tex: { s: ['rgba(74, 4, 78, 0.14)', 'rgba(254, 240, 138, 0.14)'], n: 220, r: [2, 6], line: null }, ray: ['#fed7aa', 0.05], cur: ['rgba(251, 146, 60, 0.08)', '#fb923c'], obs: 26, rock: { f: '#be123c', e: '#fed7aa', w: 3, d: 'swirl', c2: '#fde68a' }, dec: { k: 'star', c1: '#fde047', c2: '', h: [9, 14], n: 65 }, part: { n: 55, c: 'rgba(254, 240, 138, 0.5)', ring: false, dx: 0, dy: 0.3, r: [1, 2.5], sp: [12, 28] } },
+  ];
+  MAPS.push(...THEME_DATA.map(buildThemeMap));
+
   function mapForLevel(level) {
     return MAPS[Math.floor((level - 1) / MAP_EVERY) % MAPS.length];
   }
@@ -905,13 +1456,6 @@
       const tag = document.createElement('small');
       tag.textContent = m === cur ? 'En cours' : 'Dans la rotation';
       card.append(cv, name, tag);
-      list.appendChild(card);
-    }
-    // Prochaines maps, à créer plus tard
-    for (let i = 0; i < 2; i++) {
-      const card = document.createElement('div');
-      card.className = 'map-card locked';
-      card.innerHTML = '<div class="map-unknown">???</div><strong>???</strong><small>Bientôt</small>';
       list.appendChild(card);
     }
   }
@@ -1208,7 +1752,8 @@
   canvas.addEventListener('pointerdown', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; });
 
   let player, foods, enemies, followers;
-  let rocks = [], currents = [], seaweed = [], bubbles = [];
+  let rocks = [], currents = [], decor = [], bubbles = [];
+  let activeMap = null; // la map de la partie en cours (ou celle affichée dans le menu)
   let magnet = 0, growthMul = 1, shields = 0; // bonus du skin équipé pendant la partie
   let state = 'menu';
   let score = 0;
@@ -1239,11 +1784,13 @@
     return e;
   }
 
-  // Carte : récifs, courants et décor, tirés au sort à chaque partie
+  // Carte : la map vient du niveau, puis récifs, courants et décor sont tirés au sort à chaque partie
   function buildMap() {
+    activeMap = mapForLevel(levelInfo().level);
+    const mp = activeMap;
     const cx = WORLD / 2, cy = WORLD / 2;
     rocks = [];
-    for (let guard = 0; rocks.length < ROCK_COUNT && guard < 3000; guard++) {
+    for (let guard = 0; rocks.length < mp.obstacles && guard < 3000; guard++) {
       const r = rand(40, 90);
       const x = rand(r, WORLD - r), y = rand(r, WORLD - r);
       if (Math.hypot(x - cx, y - cy) < 380 + r) continue;
@@ -1258,11 +1805,14 @@
       const a = rand(0, Math.PI * 2);
       currents.push({ x, y, rx, ry, dx: Math.cos(a), dy: Math.sin(a) });
     }
-    seaweed = Array.from({ length: SEAWEED_COUNT }, () => ({
-      x: rand(0, WORLD), y: rand(0, WORLD), h: rand(50, 110), phase: rand(0, 6)
+    decor = Array.from({ length: mp.decorCount }, () => ({
+      x: rand(0, WORLD), y: rand(0, WORLD), h: rand(mp.decorH[0], mp.decorH[1]), phase: rand(0, 6)
     }));
-    bubbles = Array.from({ length: BUBBLE_COUNT }, () => ({
-      x: rand(0, WORLD), y: rand(0, WORLD), r: rand(2, 6), speed: rand(20, 60), phase: rand(0, 6)
+    bubbles = Array.from({ length: mp.particles.count }, () => ({
+      x: rand(0, WORLD), y: rand(0, WORLD),
+      r: rand(mp.particles.rMin, mp.particles.rMax),
+      speed: rand(mp.particles.speedMin, mp.particles.speedMax),
+      phase: rand(0, 6)
     }));
   }
 
@@ -1908,32 +2458,209 @@
     }
   }
 
+  // ----- Décor de chaque map : une fonction par type, appelée pour chaque élément -----
+  function drawSeaweed(s, sx, sy, now) {
+    ctx.strokeStyle = '#065f46';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i <= 4; i++) {
+      const px = sx + Math.sin(now / 700 + s.phase + i * 0.9) * 7 * (i / 4);
+      const py = sy - s.h * (i / 4);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  function drawGrass(s, sx, sy, now) {
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    const sway = Math.sin(now / 600 + s.phase) * 5;
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath();
+      ctx.moveTo(sx + k * 5, sy);
+      ctx.quadraticCurveTo(sx + k * 6 + sway * 0.5, sy - s.h * 0.6, sx + k * 9 + sway, sy - s.h);
+      ctx.stroke();
+    }
+  }
+
+  // Cactus vu du dessus : un corps et deux bras
+  function drawCactus(s, sx, sy) {
+    const r = s.h * 0.14;
+    ctx.fillStyle = '#4d7c0f';
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx - r * 1.5, sy - r * 0.4, r * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx + r * 1.4, sy + r * 0.5, r * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(217, 249, 157, 0.35)';
+    ctx.beginPath();
+    ctx.arc(sx - r * 0.3, sy - r * 0.3, r * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Évent volcanique : un cratère qui pulse
+  function drawVent(s, sx, sy, now) {
+    const pulse = (Math.sin(now / 400 + s.phase) + 1) / 2;
+    ctx.fillStyle = '#7c2d12';
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.h, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(251, 146, 60, ${0.35 + pulse * 0.55})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.h * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Cristal de glace : un losange avec un éclat
+  function drawCrystal(s, sx, sy) {
+    const h = s.h, w = h * 0.35;
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.85)';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - h);
+    ctx.lineTo(sx + w, sy);
+    ctx.lineTo(sx, sy + w);
+    ctx.lineTo(sx - w, sy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - h);
+    ctx.lineTo(sx + w * 0.35, sy - h * 0.1);
+    ctx.lineTo(sx, sy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Obstacle : même forme et même collision partout, mais un aspect propre à chaque map
+  function drawObstacle(rk, sx, sy, st) {
+    const r = rk.r;
+    ctx.fillStyle = st.fill;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = st.edge;
+    ctx.lineWidth = st.edgeWidth;
+    ctx.stroke();
+    if (st.detail === 'canopy') {
+      // Cime d'arbre vue du dessus, avec son tronc
+      ctx.fillStyle = 'rgba(190, 242, 100, 0.25)';
+      ctx.beginPath();
+      ctx.arc(sx - r * 0.35, sy - r * 0.35, r * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.arc(sx, sy, r * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (st.detail === 'strata') {
+      // Grès : anneaux de strates
+      ctx.strokeStyle = 'rgba(254, 215, 170, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r * 0.66, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(sx, sy, r * 0.36, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (st.detail === 'lava') {
+      // Basalte : fissures remplies de lave
+      ctx.strokeStyle = 'rgba(249, 115, 22, 0.75)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(sx - r * 0.55, sy - r * 0.1);
+      ctx.lineTo(sx - r * 0.1, sy + r * 0.25);
+      ctx.lineTo(sx + r * 0.45, sy - r * 0.2);
+      ctx.stroke();
+    } else if (st.detail === 'shine') {
+      // Glace : reflet blanc
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.beginPath();
+      ctx.arc(sx - r * 0.3, sy - r * 0.3, r * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (st.detail === 'dots') {
+      // Points répartis sur l'obstacle
+      ctx.fillStyle = st.c2;
+      for (let k = 0; k < 5; k++) {
+        const a = k * 1.256;
+        ctx.beginPath();
+        ctx.arc(sx + Math.cos(a) * r * 0.45, sy + Math.sin(a) * r * 0.45, r * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (st.detail === 'rings') {
+      // Anneaux concentriques
+      ctx.strokeStyle = st.c2;
+      ctx.lineWidth = 2;
+      for (const f of [0.7, 0.4]) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * f, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else if (st.detail === 'blocks') {
+      // Quadrillage, comme une ville vue d'en haut
+      ctx.strokeStyle = st.c2;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx - r * 0.55, sy);
+      ctx.lineTo(sx + r * 0.55, sy);
+      ctx.moveTo(sx, sy - r * 0.55);
+      ctx.lineTo(sx, sy + r * 0.55);
+      ctx.stroke();
+    } else if (st.detail === 'swirl') {
+      // Spirale, comme un bonbon
+      ctx.strokeStyle = st.c2;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r * 0.5, 0, Math.PI * 1.5);
+      ctx.stroke();
+    } else if (st.detail === 'cracks') {
+      // Fissures
+      ctx.strokeStyle = st.c2 || 'rgba(0, 0, 0, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx - r * 0.6, sy - r * 0.3);
+      ctx.lineTo(sx - r * 0.1, sy);
+      ctx.lineTo(sx + r * 0.2, sy - r * 0.5);
+      ctx.lineTo(sx + r * 0.6, sy + r * 0.2);
+      ctx.stroke();
+    } else {
+      // Récif : reflet, comme avant
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.15)';
+      ctx.beginPath();
+      ctx.arc(sx - r * 0.3, sy - r * 0.3, r * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   function draw(now) {
     const camX = player.x - W / 2;
     const camY = player.y - H / 2;
     const skin = byId(SKINS, save.skin) || SKINS[0];
 
-    // Océan : dégradé de la surface vers les profondeurs
+    // Fond de la map : dégradé de la surface vers les profondeurs
+    const mp = activeMap;
     const sea = ctx.createLinearGradient(0, -camY, 0, WORLD - camY);
-    sea.addColorStop(0, '#0e7490');
-    sea.addColorStop(0.55, '#075985');
-    sea.addColorStop(1, '#082f49');
+    for (const [pos, col] of mp.sky) sea.addColorStop(pos, col);
     ctx.fillStyle = sea;
     ctx.fillRect(0, 0, W, H);
 
     // Texture fixée à la carte : elle défile avec la caméra
-    if (!oceanPattern) oceanPattern = ctx.createPattern(oceanTex, 'repeat');
+    if (!mp.pattern) mp.pattern = ctx.createPattern(mp.tile, 'repeat');
     ctx.save();
     ctx.translate(-camX, -camY);
     ctx.globalAlpha = 0.9;
-    ctx.fillStyle = oceanPattern;
+    ctx.fillStyle = mp.pattern;
     ctx.fillRect(camX, camY, W, H);
     ctx.restore();
 
     // Rayons de lumière qui descendent de la surface
     ctx.save();
-    ctx.fillStyle = '#e0f2fe';
-    ctx.globalAlpha = 0.06;
+    ctx.fillStyle = mp.rays.color;
+    ctx.globalAlpha = mp.rays.alpha;
     for (let i = 0; i < 6; i++) {
       const x0 = ((i * 310 + now * 0.01) % (W + 400)) - 200;
       ctx.beginPath();
@@ -1956,11 +2683,11 @@
       const sx = z.x - camX, sy = z.y - camY;
       if (sx + z.rx < 0 || sx - z.rx > W || sy + z.ry < 0 || sy - z.ry > H) continue;
       ctx.save();
-      ctx.fillStyle = 'rgba(125, 211, 252, 0.08)';
+      ctx.fillStyle = mp.current.fill;
       ctx.beginPath();
       ctx.ellipse(sx, sy, z.rx, z.ry, Math.atan2(z.dy, z.dx), 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#bae6fd';
+      ctx.strokeStyle = mp.current.streak;
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
       for (let k = 0; k < 5; k++) {
@@ -1976,52 +2703,38 @@
       ctx.restore();
     }
 
-    // Algues qui ondulent
+    // Décor de la map : algues, herbes, cactus, évents ou cristaux
     ctx.save();
-    ctx.strokeStyle = '#065f46';
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    for (const s of seaweed) {
+    for (const s of decor) {
       const sx = s.x - camX, sy = s.y - camY;
       if (sx < -120 || sx > W + 120 || sy < -120 || sy > H + 120) continue;
-      ctx.beginPath();
-      for (let i = 0; i <= 4; i++) {
-        const px = sx + Math.sin(now / 700 + s.phase + i * 0.9) * 7 * (i / 4);
-        const py = sy - s.h * (i / 4);
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      }
-      ctx.stroke();
+      mp.drawDecor(s, sx, sy, now);
     }
     ctx.restore();
 
-    // Récifs : obstacles à contourner
+    // Obstacles de la map : récifs, arbres, rochers, basalte ou glaçons
+    ctx.save();
     for (const rk of rocks) {
       const sx = rk.x - camX, sy = rk.y - camY;
       if (sx + rk.r < 0 || sx - rk.r > W || sy + rk.r < 0 || sy - rk.r > H) continue;
-      ctx.fillStyle = '#1e3a4a';
-      ctx.beginPath();
-      ctx.arc(sx, sy, rk.r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.15)';
-      ctx.beginPath();
-      ctx.arc(sx - rk.r * 0.3, sy - rk.r * 0.3, rk.r * 0.45, 0, Math.PI * 2);
-      ctx.fill();
+      drawObstacle(rk, sx, sy, mp.rock);
     }
+    ctx.restore();
 
-    // Bulles qui montent
+    // Particules de la map : bulles, sable, braises ou neige
+    const pt = mp.particles;
     ctx.save();
-    ctx.strokeStyle = 'rgba(224, 242, 254, 0.5)';
+    ctx.strokeStyle = pt.color;
+    ctx.fillStyle = pt.color;
     ctx.lineWidth = 1.5;
     for (const b of bubbles) {
-      const by = (((b.y - now * b.speed / 1000) % WORLD) + WORLD) % WORLD;
-      const sx = b.x - camX, sy = by - camY;
+      const bx = (((b.x + pt.dx * now * b.speed / 1000) % WORLD) + WORLD) % WORLD;
+      const by = (((b.y + pt.dy * now * b.speed / 1000) % WORLD) + WORLD) % WORLD;
+      const sx = bx - camX, sy = by - camY;
       if (sx < -10 || sx > W + 10 || sy < -10 || sy > H + 10) continue;
       ctx.beginPath();
       ctx.arc(sx + Math.sin(now / 500 + b.phase) * 3, sy, b.r, 0, Math.PI * 2);
-      ctx.stroke();
+      if (pt.ring) ctx.stroke(); else ctx.fill();
     }
     ctx.restore();
 
