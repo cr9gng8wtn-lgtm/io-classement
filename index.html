@@ -3059,7 +3059,6 @@
     $('detail-msg').textContent = '';
     renderDetail();
     show('detail');
-    playItemIntro(item);
   }
   function renderDetail() {
     const item = detailItem;
@@ -4506,12 +4505,10 @@
     setTimeout(() => { el.remove(); document.body.classList.remove('gift-blur'); }, 2500);
   }
 
-  // Même entrée que la boutique, pour l'ouverture d'une fiche de skin ou de trainée :
-  // l'objet tombe au centre, des rayons de sa couleur partent autour, le fond se floute
-  function playItemIntro(item) {
+  // Même entrée que la boutique, avec un cintre pour les skins
+  function playHangerIntro() {
     const old = document.querySelector('.gift-intro');
     if (old) old.remove();
-    const col = item.color || '#facc15';
     let rays = '';
     for (let i = 0; i < 12; i++) {
       const a = i * Math.PI / 6;
@@ -4523,9 +4520,10 @@
     el.className = 'gift-intro';
     el.innerHTML =
       '<svg viewBox="0 0 120 120" aria-hidden="true">' +
-      '<g class="rays" fill="none" stroke="' + col + '" stroke-width="3" stroke-linecap="round">' + rays + '</g>' +
-      '<circle cx="60" cy="60" r="34" fill="' + col + '" fill-opacity=".35" stroke="' + col + '" stroke-width="4"/>' +
-      '<circle cx="60" cy="60" r="16" fill="' + col + '"/>' +
+      '<g class="rays" fill="none" stroke="#fde047" stroke-width="3" stroke-linecap="round">' + rays + '</g>' +
+      '<path d="M60 40 V30" fill="none" stroke="#e2e8f0" stroke-width="5" stroke-linecap="round"/>' +
+      '<path d="M60 30 a9 9 0 1 1 9 9" fill="none" stroke="#e2e8f0" stroke-width="5" stroke-linecap="round"/>' +
+      '<path d="M60 40 L14 82 Q10 90 20 90 H100 Q110 90 106 82 Z" fill="#a78bfa" stroke="#4c1d95" stroke-width="3" stroke-linejoin="round"/>' +
       '</svg>';
     document.body.appendChild(el);
     document.body.classList.add('gift-blur');
@@ -4543,7 +4541,7 @@
   $('btn-quit').onclick = quitRun;
   $('btn-go-menu').onclick = () => { renderMenu(); show('menu'); };
   $('btn-shop').onclick = () => { $('shop-msg').textContent = ''; renderShop(); show('shop'); playGiftIntro(); };
-  $('btn-skins').onclick = () => { renderSkins(); show('skins'); };
+  $('btn-skins').onclick = () => { renderSkins(); show('skins'); playHangerIntro(); };
   $('btn-ranking').onclick = () => {
     $('rank-msg').textContent = '';
     updateRankPanel();
