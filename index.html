@@ -132,6 +132,7 @@
   <button id="btn-daily" class="menu-btn">Récompenses quotidiennes <span id="daily-badge"></span></button>
   <button id="btn-ranking" class="menu-btn">Classement mondial</button>
   <button id="btn-play">PLAY</button>
+  <button id="btn-dchal" class="menu-btn"></button>
   <button id="btn-skins" class="menu-btn">Skins</button>
   <button id="btn-shop" class="menu-btn">Boutique</button>
   <button id="btn-trainees" class="menu-btn">Trainées</button>
@@ -260,6 +261,8 @@
     <h2>Perdu !</h2>
     <p id="go-score"></p>
     <p class="msg" id="go-earned"></p>
+    <button id="btn-share" class="secondary">Partager mon score</button>
+    <p class="msg" id="share-msg"></p>
     <button id="btn-again">Rejouer</button>
     <button class="secondary" id="btn-go-menu">Menu</button>
   </div>
@@ -275,6 +278,17 @@
   const ENEMY_COUNT = 30;
   const CURRENT_COUNT = 6;   // zones de courant qui poussent le joueur
   const CURRENT_PUSH = 70;   // vitesse de poussée du courant (px/s)
+  // Mini-bosses du thème et défi du jour
+  const BOSS_FIRST = 150;    // premier mini-boss à ce score
+  const BOSS_STEP = 300;     // puis un de plus tous les 300 points
+  const BOSS_POINTS = 100;   // points gagnés en mangeant le mini-boss
+  const BOSS_GROWTH = 0.4;   // croissance en le mangeant (fraction de son rayon)
+  const DAILY_TRIES = 3;     // essais du défi du jour par jour
+  let bosses = [], nextBossAt = 0;
+  let rng = Math.random;     // générateur de la partie (seedé en défi du jour)
+  let dailyMode = false;
+  let hudNote = null;        // petit message affiché dans le HUD
+  let lastRun = null;        // résumé de la dernière partie, pour le partage
 
   // Texture de l'océan : grain et ondulations dessinés une fois, puis répétés sur la carte
   const oceanTex = document.createElement('canvas');
@@ -387,7 +401,7 @@
   const AURA_PALETTE = ['#1e3a8a', '#f97316', '#dc2626', '#facc15'];
 
   // ---------- Utilitaires ----------
-  const rand = (a, b) => a + Math.random() * (b - a);
+  const rand = (a, b) => a + rng() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const byId = (list, id) => list.find((x) => x.id === id);
@@ -427,6 +441,24 @@
 
   function dayKey(d) { return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
   function todayKey() { return dayKey(new Date()); }
+  // Défi du jour : même seed pour tout le monde ce jour-là
+  function dailySeed() {
+    let h = 2166136261;
+    for (const ch of todayKey()) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    return h >>> 0;
+  }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function dailyLeft() {
+    const p = save.dailyPlay;
+    return p.day === todayKey() ? Math.max(0, DAILY_TRIES - p.n) : DAILY_TRIES;
+  }
   function yesterdayKey() {
     const d = new Date();
     d.setDate(d.getDate() - 1);
@@ -436,7 +468,7 @@
   // ---------- Sauvegarde (dans ce navigateur) ----------
   const SAVE_KEY = 'io-proto-save';
   function defaultSave() {
-    return { coins: 0, gems: 0, best: 0, xp: 0, skin: 'blue', skins: ['blue'], trainees: [], followers: [], upgrades: {}, audio: { sfx: 80, music: 50 }, pseudo: '', playerId: '', daily: { count: 0, last: null } };
+    return { coins: 0, gems: 0, best: 0, xp: 0, skin: 'blue', skins: ['blue'], trainees: [], followers: [], upgrades: {}, audio: { sfx: 80, music: 50 }, pseudo: '', playerId: '', daily: { count: 0, last: null }, dailyPlay: { day: '', n: 0, best: 0 } };
   }
   function loadSave() {
     let s = defaultSave();
@@ -516,6 +548,105 @@
     SFX[name](audio.sfxBus, audio.ctx.currentTime + 0.005);
   }
 
+  // ----- Ambiance sonore par map : un fond continu et de petits événements -----
+  audio.amb = { nodes: [], timer: null, ev: null, every: 2, scale: [] };
+  const PENTA = [72, 74, 76, 79, 81];   // gamme majeure pentatonique (bonbons, gâteaux)
+  const MINOR = [69, 72, 74, 76, 79];   // gamme mineure (livres)
+  const BRIGHT = [76, 79, 81, 84];      // notes vives (fête, jeux)
+  // Chaque groupe de maps a son fond (vagues, vent, bourdon...) et ses petits sons
+  const AMB_GROUPS = [
+    { ids: ['ocean', 'corail', 'delta', 'venise', 'marecage'], bed: 'water', ev: 'bubbles', every: 1.2 },
+    { ids: ['forest', 'jungle', 'bambou', 'automne', 'printemps', 'cerisiers', 'rio'], bed: 'wind', ev: 'birds', every: 1.6 },
+    { ids: ['desert', 'savane', 'caire', 'marrakech'], bed: 'wind', ev: 'horn', every: 6 },
+    { ids: ['mars', 'espace'], bed: 'hum', ev: 'sparkle', every: 2.5 },
+    { ids: ['ice', 'toundra', 'montagne'], bed: 'wind', ev: 'sparkle', every: 4 },
+    { ids: ['ciel'], bed: 'wind', ev: 'birds', every: 3 },
+    { ids: ['aurore'], bed: 'hum', ev: 'sparkle', every: 1.5 },
+    { ids: ['volcano'], bed: 'rumble', ev: null, every: 1 },
+    { ids: ['nuit'], bed: 'hum', ev: 'crickets', every: 1.8 },
+    { ids: ['caverne'], bed: 'hum', ev: 'bubbles', every: 2.5 },
+    { ids: ['paris', 'newyork', 'tokyo', 'londres', 'moscou'], bed: 'hum', ev: 'horn', every: 4 },
+    { ids: ['bonbons', 'chocolat', 'fraise', 'pizza', 'sushi', 'citron', 'raisin', 'cafe', 'patisserie'], bed: null, ev: 'pluck', every: 0.9, scale: PENTA },
+    { ids: ['bibliotheque', 'parchemin', 'bd', 'conte', 'manuscrit', 'partition'], bed: 'wind', ev: 'pluck', every: 1.4, scale: MINOR },
+    { ids: ['cirque', 'carnaval', 'cinema'], bed: 'hum', ev: 'pluck', every: 1.6, scale: BRIGHT },
+    { ids: ['jeuxvideo'], bed: 'hum', ev: 'blip', every: 0.8 }
+  ];
+  const AMB_BEDS = {
+    water: { type: 'bandpass', f: 380, q: 0.5, v: 0.12, lfo: 0.15, depth: 0.6 },
+    wind: { type: 'bandpass', f: 900, q: 0.6, v: 0.07, lfo: 0.07, depth: 0.5 },
+    hum: { type: 'lowpass', f: 260, q: 0.7, v: 0.1, lfo: 0, depth: 0 },
+    rumble: { type: 'lowpass', f: 110, q: 0.7, v: 0.2, lfo: 0.05, depth: 0.3 }
+  };
+  function ambEvent(kind, t) {
+    const b = audio.ambBus, sc = audio.amb.scale;
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    if (kind === 'bubbles') tone(b, rand(500, 900), t, 0.14, 'sine', 0.05, rand(900, 1400));
+    else if (kind === 'birds') {
+      const f = rand(2200, 3200);
+      tone(b, f, t, 0.1, 'sine', 0.05, f * 1.25);
+      tone(b, f * 1.1, t + 0.14, 0.09, 'sine', 0.04, f * 1.4);
+    }
+    else if (kind === 'crickets') { for (let i = 0; i < 3; i++) tone(b, 4200, t + i * 0.09, 0.04, 'sine', 0.02); }
+    else if (kind === 'horn') { tone(b, 392, t, 0.35, 'square', 0.025); tone(b, 330, t + 0.3, 0.35, 'square', 0.025); }
+    else if (kind === 'pluck' && sc.length) tone(b, mtof(pick(sc)), t, 0.8, 'triangle', 0.06);
+    else if (kind === 'blip') tone(b, pick([880, 1175, 1568]), t, 0.08, 'square', 0.03);
+    else if (kind === 'sparkle') tone(b, rand(1500, 2500), t, 0.35, 'sine', 0.03, rand(2500, 4000));
+  }
+  function ambTick() {
+    const c = audio.ctx, a = audio.amb;
+    if (!c || !a.ev || c.state !== 'running') return;
+    if (Math.random() < 0.3 / a.every) ambEvent(a.ev, c.currentTime + 0.01);
+  }
+  function startBed(cfg) {
+    const c = audio.ctx, a = audio.amb;
+    const src = c.createBufferSource();
+    src.buffer = audio.noise;
+    src.loop = true;
+    const f = c.createBiquadFilter();
+    f.type = cfg.type;
+    f.frequency.value = cfg.f;
+    f.Q.value = cfg.q;
+    const g = c.createGain();
+    g.gain.value = cfg.v;
+    src.connect(f);
+    f.connect(g);
+    g.connect(audio.ambBus);
+    a.nodes.push(src, f, g);
+    if (cfg.lfo) {
+      // le volume du fond ondule lentement (vagues, souffle)
+      const o = c.createOscillator();
+      o.frequency.value = cfg.lfo;
+      const lg = c.createGain();
+      lg.gain.value = cfg.v * cfg.depth;
+      o.connect(lg);
+      lg.connect(g.gain);
+      o.start();
+      a.nodes.push(o, lg);
+    }
+    src.start();
+  }
+  function startAmbient(id) {
+    stopAmbient();
+    if (!audio.ctx || !audio.ambBus || !audio.noise) return;
+    const g = AMB_GROUPS.find((x) => x.ids.includes(id)) || { bed: 'hum', ev: 'sparkle', every: 2 };
+    if (g.bed && AMB_BEDS[g.bed]) startBed(AMB_BEDS[g.bed]);
+    audio.amb.ev = g.ev;
+    audio.amb.every = g.every;
+    audio.amb.scale = g.scale || [];
+    audio.amb.timer = setInterval(ambTick, 300);
+  }
+  function stopAmbient() {
+    const a = audio.amb;
+    if (a.timer) clearInterval(a.timer);
+    a.timer = null;
+    for (const n of a.nodes) {
+      try { if (n.stop) n.stop(); } catch (e) {}
+      try { n.disconnect(); } catch (e) {}
+    }
+    a.nodes = [];
+    a.ev = null;
+  }
+
   // Musique : un planificateur écrit les notes une fraction de seconde à l'avance
   function scheduleMusic() {
     const c = audio.ctx;
@@ -549,6 +680,12 @@
         audio.musicBus = audio.ctx.createGain();
         audio.sfxBus.connect(audio.ctx.destination);
         audio.musicBus.connect(audio.ctx.destination);
+        // bruit blanc partagé par les ambiances, et bus dédié aux ambiances
+        audio.noise = audio.ctx.createBuffer(1, audio.ctx.sampleRate * 2, audio.ctx.sampleRate);
+        const nd = audio.noise.getChannelData(0);
+        for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+        audio.ambBus = audio.ctx.createGain();
+        audio.ambBus.connect(audio.ctx.destination);
         applyVolumes();
         startMusic();
       } catch (e) {
@@ -570,6 +707,7 @@
     if (!audio.ctx) return;
     audio.sfxBus.gain.value = (save.audio.sfx / 100) * 0.5;
     audio.musicBus.gain.value = (save.audio.music / 100) * 0.3;
+    if (audio.ambBus) audio.ambBus.gain.value = (save.audio.sfx / 100) * 0.5;
   }
   function updateVolumeLabels() {
     $('vol-sfx-val').textContent = `${save.audio.sfx} %`;
@@ -1244,6 +1382,7 @@
       decorCount: K.n || d.dec.n,
       decorH: K.h ? [K.h[0] * 1.8, K.h[1] * 1.8] : d.dec.h,
       decorList: K.dec ? K.dec.map(n => SPRITES[n]) : null,
+      boss: SPRITES[K.boss || K.hero] || null,
       drawDecor: (s, sx, sy, now) => dec(s, sx, sy, now, d.dec.c1, d.dec.c2),
       particles: {
         count: d.part.n, color: d.part.c, ring: d.part.ring, dx: d.part.dx, dy: d.part.dy,
@@ -2764,6 +2903,9 @@
     $('level-xp').textContent = `${info.into} / ${LEVEL_XP} XP`;
     $('menu-stats').innerHTML = `${save.coins} pièces · ${GEM} ${save.gems} · Meilleur score : ${save.best}`;
     $('daily-badge').textContent = canClaim() ? '(à récupérer)' : '';
+    const dLeft = dailyLeft();
+    $('btn-dchal').textContent = `Défi du jour (${dLeft}/${DAILY_TRIES} essais)`;
+    $('btn-dchal').disabled = dLeft <= 0;
   }
 
   function renderShop() {
@@ -3081,9 +3223,22 @@
     return e;
   }
 
+  // Un mini-boss apparaît loin du joueur, grand d'environ 20 % de plus que lui :
+  // il faut grandir en mangeant avant de pouvoir l'avaler
+  function spawnBoss() {
+    const b = { x: 0, y: 0, r: player.r * 1.2 + 12, vx: rand(-1, 1), vy: rand(-1, 1) };
+    do {
+      b.x = rand(0, WORLD);
+      b.y = rand(0, WORLD);
+    } while (dist(b, player) < 500 || dist(b, player) > 800 || !freeOfRocks(b.x, b.y, b.r));
+    bosses.push(b);
+    hudNote = { text: 'Mini-boss !', until: performance.now() + 3000 };
+    playSfx('go');
+  }
+
   // Carte : la map vient du niveau, puis récifs, courants et décor sont tirés au sort à chaque partie
   function buildMap() {
-    activeMap = mapForLevel(levelInfo().level);
+    activeMap = dailyMode ? MAPS[dailySeed() % MAPS.length] : mapForLevel(levelInfo().level);
     const mp = activeMap;
     const cx = WORLD / 2, cy = WORLD / 2;
     rocks = [];
@@ -3131,15 +3286,102 @@
       item: byId(TRAINEES, id)
     }));
     score = 0;
+    bosses = [];
+    nextBossAt = BOSS_FIRST;
+  }
+
+  // Défi du jour : la partie est tirée au sort avec la seed du jour
+  function startDaily() {
+    if (dailyLeft() <= 0) return;
+    dailyMode = true;
+    startRun();
   }
 
   // Lancement : compte à rebours puis la partie
   function startRun() {
     clearCountdown();
+    rng = dailyMode ? mulberry32(dailySeed()) : Math.random;
     restart();
+    rng = Math.random;
+    startAmbient(activeMap.id);
     state = 'countdown';
     show('play');
     runCountdown();
+  }
+
+  // Carte à partager : score, niveau, map et couleurs de la partie
+  function drawShareCard(r) {
+    const cv = document.createElement('canvas');
+    cv.width = 1200;
+    cv.height = 630;
+    const c = cv.getContext('2d');
+    const g = c.createLinearGradient(0, 0, 0, 630);
+    for (const [pos, col] of r.sky) g.addColorStop(pos, col);
+    c.fillStyle = g;
+    c.fillRect(0, 0, 1200, 630);
+    c.fillStyle = 'rgba(255, 255, 255, 0.07)';
+    for (let i = 0; i < 6; i++) {
+      c.beginPath();
+      c.moveTo(120 + i * 200, 0);
+      c.lineTo(190 + i * 200, 0);
+      c.lineTo(110 + i * 200 + 120, 630);
+      c.lineTo(40 + i * 200 + 120, 630);
+      c.closePath();
+      c.fill();
+    }
+    const skin = byId(SKINS, save.skin) || SKINS[0];
+    c.fillStyle = skin.color;
+    c.beginPath();
+    c.arc(930, 300, 150, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#0f172a';
+    c.beginPath(); c.arc(885, 275, 22, 0, Math.PI * 2); c.arc(975, 275, 22, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffffff';
+    c.beginPath(); c.arc(892, 268, 7, 0, Math.PI * 2); c.arc(982, 268, 7, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffffff';
+    c.textAlign = 'left';
+    c.font = '700 150px system-ui, sans-serif';
+    c.fillText(String(r.score), 80, 260);
+    c.font = '600 50px system-ui, sans-serif';
+    c.fillText('points', 86, 330);
+    c.font = '500 42px system-ui, sans-serif';
+    c.fillText(`Niveau ${r.level} · ${r.map}`, 80, 430);
+    if (r.daily) {
+      c.fillStyle = '#fde047';
+      c.font = '700 42px system-ui, sans-serif';
+      c.fillText('Défi du jour', 80, 490);
+    }
+    c.fillStyle = '#ffffff';
+    c.font = '700 46px system-ui, sans-serif';
+    c.fillText('Peux-tu me battre ?', 80, 570);
+    return cv;
+  }
+
+  // Partage : feuille de partage du téléphone si elle existe, sinon téléchargement de l'image
+  function shareScore() {
+    if (!lastRun) return;
+    const r = lastRun;
+    const text = `J'ai fait ${r.score} points (niveau ${r.level}, ${r.map}). Peux-tu me battre ?`;
+    drawShareCard(r).toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], 'mon-score.png', { type: 'image/png' });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Mon score', text });
+          return;
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'mon-score.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      $('share-msg').textContent = 'Image enregistrée : tu peux l’envoyer à tes amis.';
+    }, 'image/png');
   }
 
   // Ajoute les pièces, les gemmes, l'XP et met à jour le meilleur score
@@ -3153,6 +3395,12 @@
     save.gems += gems;
     save.xp += score;
     save.best = Math.max(save.best, score);
+    if (dailyMode) {
+      const day = todayKey();
+      if (save.dailyPlay.day !== day) save.dailyPlay = { day, n: 0, best: 0 };
+      save.dailyPlay.n += 1;
+      save.dailyPlay.best = Math.max(save.dailyPlay.best, score);
+    }
     persist();
     if (save.pseudo) pushScore().catch(() => {});
     return { earned, gems, bonus };
@@ -3161,15 +3409,20 @@
   function die() {
     state = 'over';
     playSfx('die');
+    stopAmbient();
+    lastRun = { score, level: levelInfo().level, map: activeMap.name, daily: dailyMode, sky: activeMap.sky };
     const res = endRun();
     $('go-score').textContent = `Score : ${score}`;
     const bonusText = res.bonus > 0 ? ` (dont ${res.bonus} grâce aux trainées)` : '';
     $('go-earned').innerHTML = `+${res.earned} pièces${bonusText} · +${res.gems} ${GEM}`;
+    if (dailyMode) $('go-score').textContent += ` · défi du jour, essais restants : ${dailyLeft()}`;
+    $('share-msg').textContent = '';
     show('gameover');
   }
 
   function quitRun() {
     clearCountdown();
+    stopAmbient();
     state = 'menu';
     endRun();
     renderMenu();
@@ -3301,6 +3554,50 @@
 
     // Trainées : chacune suit celle qui la précède
     let leader = player;
+    // Mini-boss : un grand objet du thème apparaît à chaque palier de score
+    if (score >= nextBossAt && bosses.length < 2) {
+      spawnBoss();
+      nextBossAt += BOSS_STEP;
+    }
+    for (let bi = bosses.length - 1; bi >= 0; bi--) {
+      const b = bosses[bi];
+      if (dist(b, player) < 900) {
+        const ang = Math.atan2(player.y - b.y, player.x - b.x);
+        b.x += Math.cos(ang) * CHASE_SPEED * 0.75 * dt;
+        b.y += Math.sin(ang) * CHASE_SPEED * 0.75 * dt;
+      } else {
+        b.x += b.vx * 25 * dt;
+        b.y += b.vy * 25 * dt;
+      }
+      b.x = clamp(b.x, 0, WORLD);
+      b.y = clamp(b.y, 0, WORLD);
+      for (const rk of rocks) {
+        const d = Math.hypot(b.x - rk.x, b.y - rk.y);
+        const min = rk.r + b.r;
+        if (d < min && d > 0) {
+          b.x = rk.x + (b.x - rk.x) / d * min;
+          b.y = rk.y + (b.y - rk.y) / d * min;
+        }
+      }
+      if (dist(b, player) < (player.r + b.r) * 0.6) {
+        if (player.r >= b.r * 0.9) {
+          // Assez grand pour l'avaler : gros bonus
+          player.r += b.r * BOSS_GROWTH;
+          score += BOSS_POINTS;
+          playSfx('box');
+          hudNote = { text: `Boss vaincu +${BOSS_POINTS}`, until: performance.now() + 2500 };
+          bosses.splice(bi, 1);
+        } else if (shields > 0) {
+          shields -= 1;
+          playSfx('shield');
+          bosses.splice(bi, 1);
+        } else {
+          die();
+          return;
+        }
+      }
+    }
+
     for (const f of followers) {
       followTarget(f, leader, dt);
       leader = f;
@@ -4055,6 +4352,21 @@
       ctx.fill();
     }
 
+    // Mini-bosses : un grand objet du thème, entouré d'un halo rouge
+    for (const b of bosses) {
+      const bx = b.x - camX, by = b.y - camY;
+      ctx.save();
+      const halo = ctx.createRadialGradient(bx, by, b.r * 0.4, bx, by, b.r * 1.3);
+      halo.addColorStop(0, 'rgba(239, 68, 68, 0.35)');
+      halo.addColorStop(1, 'rgba(239, 68, 68, 0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(bx, by, b.r * 1.3, 0, Math.PI * 2);
+      ctx.fill();
+      (activeMap.boss || SPRITES.fish)({ h: b.r * 0.75, phase: 1 }, bx, by, now);
+      ctx.restore();
+    }
+
     // Trainées qui suivent : historique de position pour la traînée
     for (const f of followers) {
       if (!f.hist) f.hist = [];
@@ -4084,7 +4396,9 @@
 
     if (state === 'play') {
       const shieldText = shields > 0 ? `  ·  Bouclier : ${shields}` : '';
-      $('hud-text').textContent = `Score : ${score}  ·  Pièces en jeu : ${Math.floor(score / 2)}${shieldText}`;
+      const dailyText = dailyMode ? 'Défi · ' : '';
+      const note = hudNote && performance.now() < hudNote.until ? ` · ${hudNote.text}` : '';
+      $('hud-text').textContent = `${dailyText}Score : ${score}  ·  Pièces en jeu : ${Math.floor(score / 2)}${shieldText}${note}`;
     }
   }
 
@@ -4099,6 +4413,14 @@
       mctx.fillStyle = e.r > player.r * 1.1 ? '#ef4444' : '#22c55e';
       mctx.beginPath();
       mctx.arc(e.x * k, e.y * k, 2, 0, Math.PI * 2);
+      mctx.fill();
+    }
+
+    // Mini-bosses en jaune
+    for (const b of bosses) {
+      mctx.fillStyle = '#f59e0b';
+      mctx.beginPath();
+      mctx.arc(b.x * k, b.y * k, 4, 0, Math.PI * 2);
       mctx.fill();
     }
 
@@ -4130,8 +4452,13 @@
   }
 
   // ---------- Boutons ----------
-  $('btn-play').onclick = startRun;
-  $('btn-again').onclick = startRun;
+  $('btn-play').onclick = () => { dailyMode = false; startRun(); };
+  $('btn-again').onclick = () => {
+    if (dailyMode && dailyLeft() <= 0) { renderMenu(); show('menu'); return; }
+    startRun();
+  };
+  $('btn-dchal').onclick = startDaily;
+  $('btn-share').onclick = shareScore;
   $('btn-quit').onclick = quitRun;
   $('btn-go-menu').onclick = () => { renderMenu(); show('menu'); };
   $('btn-shop').onclick = () => { $('shop-msg').textContent = ''; renderShop(); show('shop'); };
