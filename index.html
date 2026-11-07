@@ -1225,7 +1225,7 @@
     const dec = DECOR[d.dec.k] || DECOR.blade;
     const L = Object.assign({}, d.logo, {
       hero: K.hero ? SPRITES[K.hero] : null,
-      hs: K.hs || 34
+      hs: K.hs || 44
     });
     return {
       id: d.id,
@@ -1938,6 +1938,627 @@
       sr(x - H * 0.4, y + H * 0.18, H * 0.8, H * 0.2, '#374151');
       sl([[x, y + H * 0.2], [x, y - H * 0.1]], '#9ca3af', 3);
       sc(x, y - H * 0.16, H * 0.14, '#dc2626');
+    },
+    // ===== Versions détaillées (remplacent les premières, la dernière clé l'emporte) =====
+    eiffel: (s, x, y) => {
+      const H = s.h * 2.2, top = y - H * 0.6, base = y + H * 0.5, iron = '#7c5a3a', dark = '#3f2d1c';
+      // jambes en arc
+      sp([[x - H * 0.3, base], [x - H * 0.1, y + H * 0.05], [x + H * 0.1, y + H * 0.05], [x + H * 0.3, base]], iron);
+      sp([[x - H * 0.18, base], [x - H * 0.08, y + H * 0.08], [x - H * 0.05, y + H * 0.08], [x - H * 0.14, base]], '#a16207');
+      // arcades sous la 1re plateforme
+      sl([[x - H * 0.24, base], [x - H * 0.16, y + H * 0.28], [x - H * 0.1, y + H * 0.2]], dark, 2);
+      sl([[x + H * 0.24, base], [x + H * 0.16, y + H * 0.28], [x + H * 0.1, y + H * 0.2]], dark, 2);
+      // treillis croisé
+      for (let k = 0; k < 4; k++) {
+        const t = k / 4;
+        sl([[x - H * (0.3 - 0.2 * t), base - H * 0.04 * k], [x - H * (0.3 - 0.2 * t) + H * 0.04, base - H * 0.04 * k - H * 0.06]], dark, 1);
+      }
+      // plateformes
+      sr(x - H * 0.17, y + H * 0.1, H * 0.34, H * 0.04, dark);
+      sr(x - H * 0.11, y - H * 0.1, H * 0.22, H * 0.035, dark);
+      sr(x - H * 0.17, y + H * 0.1, H * 0.34, H * 0.01, '#fde68a');
+      // pilier central + pointe
+      sp([[x - H * 0.04, y - H * 0.1], [x, top], [x + H * 0.04, y - H * 0.1]], iron);
+      sr(x - H * 0.012, top - H * 0.04, H * 0.024, H * 0.06, dark);
+      sl([[x, top - H * 0.04], [x, top - H * 0.12]], '#dc2626', 1.5);
+      sp([[x, top - H * 0.12], [x + H * 0.05, top - H * 0.1], [x, top - H * 0.08]], '#dc2626');
+      // reflets
+      sl([[x - H * 0.2, base - H * 0.06], [x - H * 0.07, y + H * 0.05]], '#d6a85c', 1.5);
+    },
+    kremlin: (s, x, y) => {
+      const H = s.h * 1.8, wall = '#b91c1c', wallD = '#7f1d1d', gold = '#facc15', green = '#15803d';
+      // mur d'enceinte avec créneaux
+      sr(x - H * 0.5, y + H * 0.05, H, H * 0.36, wall);
+      for (let i = 0; i < 9; i++) sr(x - H * 0.5 + i * H * 0.111, y - H * 0.0, H * 0.06, H * 0.06, wall);
+      sr(x - H * 0.5, y + H * 0.33, H, H * 0.08, wallD);
+      // fenêtres du mur
+      for (let i = 0; i < 6; i++) sr(x - H * 0.42 + i * H * 0.16, y + H * 0.15, H * 0.05, H * 0.09, '#fef3c7');
+      // tours : Spasskaya centrale + deux tours latérales avec bulbes
+      const towers = [[-0.44, 0.17, 0.62], [-0.06, 0.2, 0.78], [0.3, 0.17, 0.62]];
+      for (const [tx, tw, th] of towers) {
+        const left = x + tx * H, w = H * tw, topY = y - H * th * 0.5 + H * 0.05;
+        sr(left, topY + H * 0.18, w, H * 0.42, wall);
+        sr(left, topY + H * 0.18, w * 0.2, H * 0.42, wallD);
+        // bande dorée
+        sr(left, topY + H * 0.3, w, H * 0.03, gold);
+        // fenêtre en arche
+        sr(left + w * 0.38, topY + H * 0.36, w * 0.24, H * 0.1, '#fef3c7');
+        // tente / toit vert
+        sp([[left - H * 0.02, topY + H * 0.18], [left + w / 2, topY + H * 0.02], [left + w + H * 0.02, topY + H * 0.18]], green);
+        // bulbe doré et pointe
+        sc(left + w / 2, topY + H * 0.0, H * 0.035, gold);
+        sl([[left + w / 2, topY], [left + w / 2, topY - H * 0.1]], gold, 1.5);
+      }
+      // grande tour centrale : bulbe à rayures
+      const cx = x - H * 0.06 + H * 0.09, cy = y - H * 0.18;
+      sc(cx, cy - H * 0.05, H * 0.06, gold);
+      sl([[cx, cy - H * 0.11], [cx, cy - H * 0.16]], gold, 1.5);
+    },
+    bigben: (s, x, y) => {
+      const H = s.h * 1.6, stone = '#d6a35c', stoneD = '#92400e', face = '#fffbeb', gold = '#fde047';
+      // corps de la tour avec colonnes
+      sr(x - H * 0.14, y - H * 0.35, H * 0.28, H * 0.82, stone);
+      sr(x + H * 0.08, y - H * 0.35, H * 0.06, H * 0.82, stoneD);
+      // balcon + fenêtres
+      sr(x - H * 0.18, y + H * 0.08, H * 0.36, H * 0.05, stoneD);
+      sr(x - H * 0.06, y + H * 0.25, H * 0.12, H * 0.2, '#422006');
+      // cadran d'horloge avec aiguilles
+      sc(x, y - H * 0.18, H * 0.11, stoneD);
+      sc(x, y - H * 0.18, H * 0.095, face);
+      sl([[x, y - H * 0.18], [x, y - H * 0.27]], '#111827', 1.5);
+      sl([[x, y - H * 0.18], [x + H * 0.06, y - H * 0.18]], '#111827', 1.5);
+      for (let k = 0; k < 4; k++) {
+        const a = k * Math.PI / 2;
+        sc(x + Math.cos(a) * H * 0.075, y - H * 0.18 + Math.sin(a) * H * 0.075, 1, '#111827');
+      }
+      // lanterne et flèche dorée
+      sr(x - H * 0.1, y - H * 0.46, H * 0.2, H * 0.11, stone);
+      sp([[x - H * 0.16, y - H * 0.46], [x, y - H * 0.66], [x + H * 0.16, y - H * 0.46]], stoneD);
+      sl([[x, y - H * 0.66], [x, y - H * 0.74]], gold, 2);
+      sc(x, y - H * 0.75, H * 0.02, gold);
+    },
+    tokyotower: (s, x, y) => {
+      const H = s.h * 2, o = '#ea580c', w = '#ffffff', d = '#9a3412';
+      // pieds écartés
+      sp([[x - H * 0.3, y + H * 0.5], [x - H * 0.1, y + H * 0.15], [x - H * 0.06, y + H * 0.15], [x - H * 0.22, y + H * 0.5]], o);
+      sp([[x + H * 0.3, y + H * 0.5], [x + H * 0.1, y + H * 0.15], [x + H * 0.06, y + H * 0.15], [x + H * 0.22, y + H * 0.5]], o);
+      // treillis : deux lignes et croix
+      for (let k = 0; k < 4; k++) {
+        const t = k / 4, yy = y + H * 0.5 - t * H * 0.35;
+        sl([[x - H * (0.3 - 0.2 * t), yy], [x + H * (0.3 - 0.2 * t), yy]], d, 1);
+      }
+      sl([[x - H * 0.1, y + H * 0.15], [x + H * 0.1, y - H * 0.1]], d, 1);
+      sl([[x + H * 0.1, y + H * 0.15], [x - H * 0.1, y - H * 0.1]], d, 1);
+      // bandes blanches
+      sr(x - H * 0.19, y + H * 0.22, H * 0.38, H * 0.04, w);
+      sr(x - H * 0.13, y + H * 0.06, H * 0.26, H * 0.04, w);
+      sr(x - H * 0.08, y - H * 0.08, H * 0.16, H * 0.035, w);
+      // plateforme d'observation
+      se(x, y + H * 0.14, H * 0.14, H * 0.035, 0, o);
+      se(x, y - H * 0.05, H * 0.09, H * 0.03, 0, o);
+      // antenne
+      sl([[x, y - H * 0.1], [x, y - H * 0.5]], '#9ca3af', 2);
+      sr(x - H * 0.04, y - H * 0.3, H * 0.08, H * 0.04, w);
+      sc(x, y - H * 0.5, H * 0.02, '#ef4444');
+    },
+    basil: (s, x, y) => {
+      const H = s.h * 1.6;
+      // soubassement
+      sr(x - H * 0.42, y + H * 0.22, H * 0.84, H * 0.1, '#e7e5e4');
+      // bulbes colorés (tambour + oignon + pointe)
+      const bulbs = [[-0.27, 0.13, '#16a34a', '#fde047'], [-0.1, 0.19, '#dc2626', '#fde047'], [0.08, 0.17, '#2563eb', '#fde047'], [0.26, 0.12, '#f59e0b', '#fde047']];
+      for (const [bx, br, col, gold] of bulbs) {
+        const cx = x + bx * H, top = y - H * 0.02 - br * H * 0.4;
+        sr(cx - br * H * 0.4, y - H * 0.02, br * H * 0.8, H * 0.24, '#f5f5f4');
+        se(cx, top + br * H * 0.4, br * H * 0.5, br * H * 0.55, 0, col);
+        sp([[cx - br * H * 0.4, top + br * H * 0.4], [cx, top - br * H * 0.4], [cx + br * H * 0.4, top + br * H * 0.4]], col);
+        // côtes des bulbes
+        sl([[cx, top + br * H * 0.5], [cx, top - br * H * 0.35]], '#ffffff', 1);
+        sc(cx, top - br * H * 0.42, H * 0.025, gold);
+      }
+      // fenêtres
+      for (let k = 0; k < 4; k++) sr(x - H * 0.36 + k * H * 0.22, y + H * 0.15, H * 0.06, H * 0.07, '#451a03');
+    },
+    christ: (s, x, y) => {
+      const H = s.h * 1.8, st = '#e7e5e4', stD = '#a8a29e';
+      // piédestal à étages
+      sr(x - H * 0.22, y + H * 0.2, H * 0.44, H * 0.22, stD);
+      sr(x - H * 0.14, y + H * 0.12, H * 0.28, H * 0.1, st);
+      // corps
+      sr(x - H * 0.05, y - H * 0.25, H * 0.1, H * 0.4, st);
+      // bras
+      sr(x - H * 0.34, y - H * 0.26, H * 0.68, H * 0.09, st);
+      sr(x - H * 0.34, y - H * 0.26, H * 0.68, H * 0.02, '#ffffff');
+      // tête et auréole
+      sc(x, y - H * 0.34, H * 0.065, st);
+      sc(x, y - H * 0.34, H * 0.09, 'rgba(253, 224, 71, 0.35)');
+      // drapé
+      sp([[x - H * 0.05, y - H * 0.1], [x - H * 0.14, y + H * 0.1], [x - H * 0.04, y + H * 0.12]], stD);
+    },
+    rialto: (s, x, y) => {
+      const H = s.h * 1.8, st = '#e7e5e4', stD = '#a8a29e', water = '#0ea5e9';
+      // arche du pont
+      ctx.fillStyle = st;
+      ctx.beginPath();
+      ctx.moveTo(x - H * 0.5, y + H * 0.22);
+      ctx.quadraticCurveTo(x, y - H * 0.25, x + H * 0.5, y + H * 0.22);
+      ctx.lineTo(x + H * 0.5, y + H * 0.3);
+      ctx.quadraticCurveTo(x, y - H * 0.16, x - H * 0.5, y + H * 0.3);
+      ctx.closePath();
+      ctx.fill();
+      // arche sombre dessous + reflet dans l'eau
+      ctx.fillStyle = stD;
+      ctx.beginPath();
+      ctx.moveTo(x - H * 0.25, y + H * 0.3);
+      ctx.quadraticCurveTo(x, y - H * 0.04, x + H * 0.25, y + H * 0.3);
+      ctx.closePath();
+      ctx.fill();
+      // petites arcades et balustrade
+      for (let k = -2; k <= 2; k++) sr(x + k * H * 0.13 - H * 0.03, y - H * 0.02 + Math.abs(k) * 0.01 * H, H * 0.06, H * 0.05, '#f5f5f4');
+      sr(x - H * 0.5, y + H * 0.2, H, H * 0.03, stD);
+      sr(x - H * 0.5, y + H * 0.32, H, H * 0.04, water);
+    },
+    gondola: (s, x, y) => {
+      const H = s.h * 1.2, wood = '#111827';
+      // coque noire pointue
+      sp([[x - H * 0.55, y - H * 0.05], [x + H * 0.55, y - H * 0.05], [x + H * 0.3, y + H * 0.16], [x - H * 0.3, y + H * 0.16]], wood);
+      sp([[x - H * 0.55, y - H * 0.05], [x - H * 0.62, y - H * 0.2], [x - H * 0.5, y - H * 0.08]], wood);
+      // liseré doré et ferraille
+      sl([[x - H * 0.5, y - H * 0.02], [x + H * 0.5, y - H * 0.02]], '#f59e0b', 1.5);
+      // gondolier au bout
+      sc(x + H * 0.4, y - H * 0.3, H * 0.09, '#f5d0a9');
+      sp([[x + H * 0.3, y - H * 0.2], [x + H * 0.5, y - H * 0.2], [x + H * 0.45, y - H * 0.02], [x + H * 0.35, y - H * 0.02]], '#dc2626');
+      sl([[x + H * 0.4, y - H * 0.22], [x + H * 0.5, y - H * 0.5]], '#78350f', 2);
+    },
+    skyscraper: (s, x, y) => {
+      const H = s.h * 1.3, g = '#64748b', gD = '#334155', win = '#fde68a', winD = '#1e293b';
+      // corps principal avec décrochement
+      sr(x - H * 0.4, y - H * 0.4, H * 0.8, H * 0.8, g);
+      sr(x - H * 0.4, y + H * 0.2, H * 0.8, H * 0.2, gD);
+      sr(x - H * 0.22, y - H * 0.62, H * 0.44, H * 0.22, g);
+      sr(x - H * 0.22, y - H * 0.62, H * 0.44, H * 0.04, '#94a3b8');
+      // antenne
+      sl([[x, y - H * 0.62], [x, y - H * 0.78]], '#e2e8f0', 2);
+      sc(x, y - H * 0.8, H * 0.025, '#ef4444');
+      // grille de fenêtres éclairées
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 5; j++) {
+        const on = (i * 3 + j * 7) % 4 !== 0;
+        sr(x - H * 0.33 + i * H * 0.18, y - H * 0.34 + j * H * 0.1, H * 0.1, H * 0.06, on ? win : winD);
+      }
+    },
+    minaret: (s, x, y) => {
+      const H = s.h * 2, w = '#f5f5f4', wD = '#d6d3d1', g = '#16a34a', gold = '#fde047';
+      // fût avec balcons
+      sr(x - H * 0.1, y - H * 0.36, H * 0.2, H * 0.82, w);
+      sr(x + H * 0.04, y - H * 0.36, H * 0.06, H * 0.82, wD);
+      sr(x - H * 0.16, y - H * 0.1, H * 0.32, H * 0.04, wD);
+      sr(x - H * 0.16, y - H * 0.28, H * 0.32, H * 0.04, wD);
+      // fenêtre en arche
+      sr(x - H * 0.03, y + H * 0.1, H * 0.06, H * 0.12, '#451a03');
+      // lanterne verte et dôme doré
+      sr(x - H * 0.12, y - H * 0.42, H * 0.24, H * 0.06, w);
+      sc(x, y - H * 0.46, H * 0.12, g);
+      sc(x, y - H * 0.46, H * 0.04, gold);
+      sl([[x, y - H * 0.5], [x, y - H * 0.6]], gold, 1.5);
+      sr(x - H * 0.18, y + H * 0.42, H * 0.36, H * 0.07, '#a8a29e');
+    },
+    pyramid: (s, x, y) => {
+      const H = s.h * 1.6, stone = '#eab308', stoneD = '#a16207', stoneL = '#fde047';
+      // face ensoleillée et face d'ombre
+      sp([[x - H * 0.5, y + H * 0.4], [x, y - H * 0.4], [x, y + H * 0.4]], stoneL);
+      sp([[x, y - H * 0.4], [x + H * 0.5, y + H * 0.4], [x, y + H * 0.4]], stoneD);
+      // assises de pierre
+      for (let k = 1; k < 5; k++) {
+        const yy = y - H * 0.4 + k * H * 0.16, half = H * 0.5 * (k * 0.16) / 0.8;
+        sl([[x - half * 0.9, yy], [x + half * 0.9, yy]], 'rgba(120, 53, 15, 0.45)', 1);
+      }
+      // entrée
+      sp([[x - H * 0.04, y + H * 0.4], [x, y + H * 0.2], [x + H * 0.04, y + H * 0.4]], '#422006');
+      // soleil
+      sc(x + H * 0.42, y - H * 0.42, H * 0.1, '#fef3c7');
+    },
+    camel: (s, x, y) => {
+      const H = s.h * 1.4, c = '#d97706', cD = '#92400e', cL = '#fbbf24';
+      // pattes avec sabots
+      for (const dx of [-0.24, -0.12, 0.12, 0.24]) {
+        sl([[x + dx * H, y + H * 0.14], [x + dx * H, y + H * 0.4]], cD, 3);
+        sl([[x + dx * H, y + H * 0.4], [x + dx * H + H * 0.03, y + H * 0.42]], '#422006', 3);
+      }
+      // corps avec ventre et bosse
+      se(x, y + H * 0.02, H * 0.36, H * 0.17, 0, c);
+      se(x - H * 0.04, y - H * 0.08, H * 0.12, H * 0.14, 0, c);
+      se(x - H * 0.04, y - H * 0.08, H * 0.05, H * 0.07, 0, cL);
+      // cou et tête
+      sl([[x + H * 0.26, y - H * 0.02], [x + H * 0.34, y - H * 0.24]], c, H * 0.1);
+      se(x + H * 0.37, y - H * 0.27, H * 0.1, H * 0.07, -0.3, c);
+      sc(x + H * 0.4, y - H * 0.29, H * 0.012, '#111827');
+      // queue
+      sl([[x - H * 0.36, y], [x - H * 0.42, y + H * 0.14]], cD, 2);
+    },
+    palm: (s, x, y, now) => decPalm(s, x, y, now, '#15803d'),
+    bigtop: (s, x, y) => {
+      const H = s.h * 1.5, r = H * 0.42;
+      // toile à 8 pans rayés
+      for (let i = 0; i < 8; i++) {
+        ctx.fillStyle = i % 2 ? '#ffffff' : '#dc2626';
+        ctx.beginPath();
+        ctx.moveTo(x, y - H * 0.1);
+        ctx.arc(x, y - H * 0.1, r, Math.PI + (i * Math.PI) / 4, Math.PI + ((i + 1) * Math.PI) / 4);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // drapeau au sommet et bord festonné
+      sp([[x - r, y - H * 0.1], [x - r * 0.8, y + H * 0.02], [x - r * 0.4, y - H * 0.1], [x, y + H * 0.02], [x + r * 0.4, y - H * 0.1], [x + r * 0.8, y + H * 0.02], [x + r, y - H * 0.1]], '#fde047');
+      sl([[x, y - H * 0.1], [x, y - H * 0.4]], '#78350f', 2);
+      sp([[x, y - H * 0.4], [x + H * 0.14, y - H * 0.36], [x, y - H * 0.32]], '#fde047');
+    },
+    mask: (s, x, y) => {
+      const H = s.h * 1.3;
+      // masque de carnaval : deux demi-lunes à paillettes
+      ctx.fillStyle = '#7c3aed';
+      for (const sgn of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(x + sgn * H * 0.2, y, H * 0.22, H * 0.16, sgn * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        sc(x + sgn * H * 0.2, y, H * 0.08, '#111827');
+        sc(x + sgn * H * 0.2, y, H * 0.03, '#fde047');
+      }
+      sl([[x - H * 0.42, y - H * 0.02], [x - H * 0.04, y - H * 0.04]], '#facc15', 2.5);
+      sl([[x + H * 0.04, y - H * 0.04], [x + H * 0.42, y - H * 0.02]], '#facc15', 2.5);
+      // plumes et paillettes
+      for (let k = 0; k < 6; k++) sc(x - H * 0.36 + k * H * 0.14, y - H * 0.24 - (k % 2) * H * 0.04, H * 0.025, ['#f43f5e', '#facc15', '#22d3ee'][k % 3]);
+    },
+    invader: (s, x, y) => {
+      const H = s.h, px = H * 0.2;
+      // envahisseur pixel-art en 2 couleurs
+      const pat = [[0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], [0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0], [0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1], [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0]];
+      for (let r = 0; r < pat.length; r++) for (let c = 0; c < 11; c++) {
+        if (pat[r][c]) sr(x - 5.5 * px + c * px, y - 4 * px + r * px, px * 0.92, px * 0.92, r % 2 ? '#22d3ee' : '#a855f7');
+      }
+    },
+    joystick: (s, x, y) => {
+      const H = s.h * 1.2;
+      // borne rouge et noire
+      sr(x - H * 0.42, y + H * 0.18, H * 0.84, H * 0.22, '#374151');
+      sr(x - H * 0.42, y + H * 0.18, H * 0.84, H * 0.04, '#6b7280');
+      for (let k = 0; k < 4; k++) sc(x - H * 0.3 + k * H * 0.2, y + H * 0.3, H * 0.03, ['#dc2626', '#facc15', '#22c55e', '#3b82f6'][k]);
+      // manche et boule
+      sl([[x, y + H * 0.18], [x, y - H * 0.12]], '#9ca3af', 3);
+      sc(x, y - H * 0.18, H * 0.15, '#dc2626');
+      sc(x - H * 0.04, y - H * 0.22, H * 0.04, '#fca5a5');
+    },
+    openbook: (s, x, y) => {
+      const H = s.h * 1.4;
+      // pages blanches courbées avec lignes de texte
+      sp([[x, y - H * 0.22], [x - H * 0.5, y - H * 0.34], [x - H * 0.5, y + H * 0.3], [x, y + H * 0.18]], '#fafaf9');
+      sp([[x, y - H * 0.22], [x + H * 0.5, y - H * 0.34], [x + H * 0.5, y + H * 0.3], [x, y + H * 0.18]], '#f5f5f4');
+      sp([[x - H * 0.5, y - H * 0.34], [x - H * 0.52, y - H * 0.36], [x - H * 0.52, y + H * 0.32], [x - H * 0.5, y + H * 0.3]], '#7c2d12');
+      sp([[x + H * 0.5, y - H * 0.34], [x + H * 0.52, y - H * 0.36], [x + H * 0.52, y + H * 0.32], [x + H * 0.5, y + H * 0.3]], '#7c2d12');
+      sl([[x, y - H * 0.22], [x, y + H * 0.18]], '#a8a29e', 1.5);
+      for (let i = 0; i < 4; i++) {
+        sl([[x - H * 0.4, y - H * 0.1 + i * H * 0.1], [x - H * 0.1, y - H * 0.12 + i * H * 0.1]], '#78716c', 1);
+        sl([[x + H * 0.1, y - H * 0.12 + i * H * 0.1], [x + H * 0.4, y - H * 0.1 + i * H * 0.1]], '#78716c', 1);
+      }
+      // signet
+      sl([[x + H * 0.3, y + H * 0.3], [x + H * 0.32, y + H * 0.42]], '#dc2626', 2);
+    },
+    cupcake: (s, x, y) => {
+      const H = s.h * 1.3;
+      // moule cannelé
+      sp([[x - H * 0.3, y + H * 0.12], [x + H * 0.3, y + H * 0.12], [x + H * 0.22, y + H * 0.44], [x - H * 0.22, y + H * 0.44]], '#f59e0b');
+      for (let k = -2; k <= 2; k++) sl([[x + k * H * 0.1, y + H * 0.12], [x + k * H * 0.08, y + H * 0.44]], '#b45309', 1);
+      // crème en spirale
+      se(x, y - H * 0.02, H * 0.34, H * 0.2, 0, '#fbcfe8');
+      se(x, y - H * 0.1, H * 0.25, H * 0.16, 0, '#f9a8d4');
+      se(x, y - H * 0.18, H * 0.15, H * 0.1, 0, '#fbcfe8');
+      // cerise et perles
+      sc(x, y - H * 0.3, H * 0.09, '#dc2626');
+      sc(x - H * 0.03, y - H * 0.33, H * 0.03, '#fecaca');
+      for (let k = 0; k < 4; k++) sc(x - H * 0.2 + k * H * 0.13, y + H * 0.02, H * 0.02, '#ffffff');
+    },
+    pizza: (s, x, y) => {
+      const H = s.h * 1.3;
+      // croûte et part triangulaire
+      sp([[x - H * 0.44, y - H * 0.22], [x + H * 0.44, y - H * 0.22], [x, y + H * 0.44]], '#fbbf24');
+      sp([[x - H * 0.4, y - H * 0.14], [x + H * 0.4, y - H * 0.14], [x, y + H * 0.4]], '#fde047');
+      // bord de la croûte
+      sl([[x - H * 0.44, y - H * 0.22], [x + H * 0.44, y - H * 0.22]], '#b45309', 4);
+      // sauce et fromage fondu
+      for (let k = 0; k < 6; k++) sc(x - H * 0.25 + (k % 3) * H * 0.25, y - H * 0.04 + Math.floor(k / 3) * H * 0.2, H * 0.03, '#fef9c3');
+      // pepperoni
+      for (const [dx, dy] of [[-0.18, -0.02], [0.14, -0.02], [-0.01, 0.2]]) {
+        sc(x + dx * H, y + dy * H, H * 0.09, '#b91c1c');
+        sc(x + dx * H, y + dy * H, H * 0.09, 'rgba(0,0,0,0)');
+        sc(x + dx * H - H * 0.02, y + dy * H - H * 0.02, H * 0.02, '#fca5a5');
+      }
+    },
+    sushi: (s, x, y) => {
+      const H = s.h * 1.3;
+      // rouleau : algue, riz, saumon, sésame
+      sc(x, y, H * 0.44, '#14532d');
+      sc(x, y, H * 0.36, '#f8fafc');
+      sc(x, y, H * 0.2, '#fb7185');
+      sc(x - H * 0.04, y - H * 0.04, H * 0.06, '#fda4af');
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4;
+        sc(x + Math.cos(a) * H * 0.3, y + Math.sin(a) * H * 0.3, H * 0.018, '#111827');
+      }
+    },
+    strawberry: (s, x, y) => {
+      const H = s.h * 1.2;
+      // feuilles de calice
+      sp([[x - H * 0.3, y - H * 0.12], [x - H * 0.14, y - H * 0.24], [x - H * 0.04, y - H * 0.08], [x, y - H * 0.24], [x + H * 0.04, y - H * 0.08], [x + H * 0.14, y - H * 0.24], [x + H * 0.3, y - H * 0.12], [x, y - H * 0.02]], '#15803d');
+      // fraise rouge en forme de cœur allongé avec ombre
+      sp([[x - H * 0.34, y - H * 0.1], [x + H * 0.34, y - H * 0.1], [x + H * 0.16, y + H * 0.2], [x, y + H * 0.44], [x - H * 0.16, y + H * 0.2]], '#dc2626');
+      sp([[x + H * 0.06, y - H * 0.1], [x + H * 0.34, y - H * 0.1], [x + H * 0.16, y + H * 0.2], [x + H * 0.02, y + H * 0.3]], '#b91c1c');
+      // pépins
+      for (const [dx, dy] of [[-0.18, -0.02], [0.02, -0.02], [-0.1, 0.12], [0.12, 0.1], [-0.02, 0.27], [0.18, -0.02], [-0.22, 0.04]]) {
+        se(x + dx * H, y + dy * H, H * 0.017, H * 0.03, 0, '#fde047');
+      }
+    },
+    lollipop: (s, x, y) => {
+      const H = s.h * 1.3;
+      // bâton blanc à rayures
+      sr(x - H * 0.03, y - H * 0.02, H * 0.06, H * 0.5, '#f8fafc');
+      for (let k = 0; k < 4; k++) sl([[x - H * 0.03, y + k * H * 0.12], [x + H * 0.03, y + k * H * 0.12 + H * 0.04]], '#ef4444', 2);
+      // sucette spirale
+      sc(x, y - H * 0.16, H * 0.3, '#f0abfc');
+      for (let k = 1; k <= 4; k++) {
+        ctx.strokeStyle = k % 2 ? '#ffffff' : '#c026d3';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y - H * 0.16, H * 0.06 * k, 0, Math.PI * 1.6);
+        ctx.stroke();
+      }
+      sc(x - H * 0.1, y - H * 0.26, H * 0.04, '#fdf4ff');
+    },
+    donut: (s, x, y) => {
+      const H = s.h * 1.1;
+      // pâte dorée avec glaçage rose et arrosage coloré
+      sc(x, y, H * 0.42, '#d97706');
+      sc(x, y, H * 0.38, '#f9a8d4');
+      sc(x, y, H * 0.14, '#0c4a6e');
+      for (let k = 0; k < 10; k++) {
+        const a = k * Math.PI / 5 + 0.2;
+        sc(x + Math.cos(a) * H * 0.27, y + Math.sin(a) * H * 0.27, H * 0.028, ['#facc15', '#22d3ee', '#ffffff', '#a855f7'][k % 4]);
+      }
+    },
+    coffee: (s, x, y) => {
+      const H = s.h * 1.2;
+      // tasse vue de dessus avec mousse en cœur
+      sc(x, y, H * 0.45, '#e7e5e4');
+      sc(x, y, H * 0.36, '#fafaf9');
+      sc(x, y, H * 0.28, '#78350f');
+      sc(x - H * 0.04, y - H * 0.06, H * 0.12, '#a16207');
+      sc(x - H * 0.03, y - H * 0.08, H * 0.05, '#fef3c7');
+      // anse et soucoupe
+      sr(x + H * 0.4, y - H * 0.06, H * 0.14, H * 0.1, '#e7e5e4');
+    },
+    book: (s, x, y) => {
+      const H = s.h * 1.3;
+      // couverture, dos foncé, pages blanches, titre doré
+      sr(x - H * 0.3, y - H * 0.42, H * 0.6, H * 0.84, '#1d4ed8');
+      sr(x - H * 0.3, y - H * 0.42, H * 0.1, H * 0.84, '#1e3a8a');
+      sr(x + H * 0.26, y - H * 0.38, H * 0.04, H * 0.76, '#f5f5f4');
+      sr(x - H * 0.16, y - H * 0.24, H * 0.36, H * 0.06, '#fde047');
+      sc(x, y + H * 0.04, H * 0.1, '#fde047');
+      sr(x - H * 0.16, y + H * 0.22, H * 0.36, H * 0.03, '#93c5fd');
+    },
+    scroll: (s, x, y) => {
+      const H = s.h * 1.2;
+      // parchemin enroulé à deux rouleaux, texte en lettrine rouge
+      sr(x - H * 0.36, y - H * 0.25, H * 0.72, H * 0.5, '#fef3c7');
+      sc(x - H * 0.36, y - H * 0.25, H * 0.1, '#a16207');
+      sc(x - H * 0.36, y + H * 0.25, H * 0.1, '#a16207');
+      sc(x + H * 0.36, y - H * 0.25, H * 0.1, '#a16207');
+      sc(x + H * 0.36, y + H * 0.25, H * 0.1, '#a16207');
+      sr(x - H * 0.3, y - H * 0.2, H * 0.6, H * 0.4, '#fffbeb');
+      sr(x - H * 0.26, y - H * 0.13, H * 0.06, H * 0.06, '#b91c1c');
+      for (let i = 0; i < 4; i++) sl([[x - H * 0.18, y - H * 0.08 + i * H * 0.08], [x + H * 0.24, y - H * 0.08 + i * H * 0.08]], '#92400e', 1);
+    },
+    car: (s, x, y) => {
+      const H = s.h * 1.1, cols = ['#dc2626', '#2563eb', '#f5f5f4', '#374151', '#16a34a'];
+      const col = cols[Math.floor(s.phase) % 5];
+      // carrosserie avec capot, coffre et bas-de-caisse sombre
+      sp([[x - H * 0.5, y + H * 0.12], [x - H * 0.5, y - H * 0.02], [x - H * 0.34, y - H * 0.08], [x - H * 0.18, y - H * 0.28], [x + H * 0.18, y - H * 0.28], [x + H * 0.34, y - H * 0.08], [x + H * 0.5, y - H * 0.02], [x + H * 0.5, y + H * 0.12]], col);
+      sr(x - H * 0.5, y + H * 0.06, H, H * 0.06, 'rgba(0,0,0,0.35)');
+      // pare-brise, vitres latérales et séparation
+      sp([[x - H * 0.15, y - H * 0.24], [x + H * 0.15, y - H * 0.24], [x + H * 0.27, y - H * 0.08], [x - H * 0.27, y - H * 0.08]], '#bae6fd');
+      sl([[x, y - H * 0.24], [x, y - H * 0.08]], 'rgba(0,0,0,0.4)', 1.5);
+      // phares et feux arrière
+      sc(x + H * 0.47, y - H * 0.02, H * 0.035, '#fef08a');
+      sc(x - H * 0.47, y - H * 0.02, H * 0.035, '#ef4444');
+      // roues
+      for (const dx of [-0.3, 0.3]) {
+        sc(x + dx * H, y + H * 0.12, H * 0.1, '#111827');
+        sc(x + dx * H, y + H * 0.12, H * 0.045, '#9ca3af');
+      }
+    },
+    taxi: (s, x, y) => {
+      const H = s.h * 1.1, y0 = '#facc15', dark = '#a16207';
+      sp([[x - H * 0.5, y + H * 0.12], [x - H * 0.5, y - H * 0.02], [x - H * 0.34, y - H * 0.08], [x - H * 0.18, y - H * 0.28], [x + H * 0.18, y - H * 0.28], [x + H * 0.34, y - H * 0.08], [x + H * 0.5, y - H * 0.02], [x + H * 0.5, y + H * 0.12]], y0);
+      sr(x - H * 0.5, y + H * 0.06, H, H * 0.06, 'rgba(0,0,0,0.35)');
+      sp([[x - H * 0.15, y - H * 0.24], [x + H * 0.15, y - H * 0.24], [x + H * 0.27, y - H * 0.08], [x - H * 0.27, y - H * 0.08]], '#bae6fd');
+      // enseigne TAXI sur le toit
+      sr(x - H * 0.08, y - H * 0.33, H * 0.16, H * 0.06, '#fef9c3');
+      sr(x - H * 0.08, y - H * 0.33, H * 0.16, H * 0.02, dark);
+      // damier latéral
+      for (let k = 0; k < 5; k++) sr(x - H * 0.42 + k * H * 0.08, y + H * 0.0, H * 0.04, H * 0.04, '#111827');
+      sc(x + H * 0.47, y - H * 0.02, H * 0.035, '#fef08a');
+      for (const dx of [-0.3, 0.3]) {
+        sc(x + dx * H, y + H * 0.12, H * 0.1, '#111827');
+        sc(x + dx * H, y + H * 0.12, H * 0.045, '#9ca3af');
+      }
+    },
+    bus: (s, x, y) => {
+      const H = s.h * 1.4, red = '#dc2626', redD = '#7f1d1d';
+      // caisse rouge avec bande blanche et pare-brise avant
+      sr(x - H * 0.5, y - H * 0.24, H, H * 0.4, red);
+      sr(x - H * 0.5, y + H * 0.02, H, H * 0.03, '#ffffff');
+      sr(x - H * 0.5, y + H * 0.1, H, H * 0.04, redD);
+      // fenêtres
+      for (let k = 0; k < 4; k++) sr(x - H * 0.44 + k * H * 0.2, y - H * 0.18, H * 0.16, H * 0.14, '#bae6fd');
+      sr(x + H * 0.36, y - H * 0.18, H * 0.12, H * 0.2, '#bae6fd');
+      // roues
+      for (const dx of [-0.3, 0.26]) {
+        sc(x + dx * H, y + H * 0.16, H * 0.09, '#111827');
+        sc(x + dx * H, y + H * 0.16, H * 0.04, '#9ca3af');
+      }
+      sc(x + H * 0.47, y - H * 0.1, H * 0.03, '#fef08a');
+    },
+    phonebox: (s, x, y) => {
+      const H = s.h * 1.1, red = '#b91c1c';
+      // cabine rouge avec couronne et vitres
+      sr(x - H * 0.24, y - H * 0.34, H * 0.48, H * 0.66, red);
+      sp([[x - H * 0.28, y - H * 0.34], [x, y - H * 0.46], [x + H * 0.28, y - H * 0.34]], red);
+      sr(x - H * 0.24, y + H * 0.3, H * 0.48, H * 0.04, '#7f1d1d');
+      sr(x - H * 0.18, y - H * 0.22, H * 0.36, H * 0.28, '#fef2f2');
+      sl([[x, y - H * 0.22], [x, y + H * 0.06]], red, 2);
+      sl([[x - H * 0.18, y - H * 0.08], [x + H * 0.18, y - H * 0.08]], red, 2);
+      sr(x - H * 0.18, y + H * 0.1, H * 0.36, H * 0.12, '#fde68a');
+      sr(x - H * 0.04, y - H * 0.05, H * 0.08, H * 0.04, '#111827');
+    },
+    rocket: (s, x, y) => {
+      const H = s.h * 1.4;
+      // corps avec hublot et bandes rouges
+      sp([[x - H * 0.12, y + H * 0.2], [x - H * 0.12, y - H * 0.3], [x, y - H * 0.6], [x + H * 0.12, y - H * 0.3], [x + H * 0.12, y + H * 0.2]], '#f1f5f9');
+      sp([[x + H * 0.02, y + H * 0.2], [x + H * 0.02, y - H * 0.3], [x, y - H * 0.6], [x + H * 0.12, y - H * 0.3], [x + H * 0.12, y + H * 0.2]], '#cbd5e1');
+      sr(x - H * 0.12, y + H * 0.02, H * 0.24, H * 0.04, '#dc2626');
+      sc(x, y - H * 0.2, H * 0.07, '#38bdf8');
+      sc(x, y - H * 0.2, H * 0.04, '#e0f2fe');
+      // ailerons
+      sp([[x - H * 0.12, y + H * 0.05], [x - H * 0.26, y + H * 0.3], [x - H * 0.12, y + H * 0.22]], '#dc2626');
+      sp([[x + H * 0.12, y + H * 0.05], [x + H * 0.26, y + H * 0.3], [x + H * 0.12, y + H * 0.22]], '#dc2626');
+      // flamme
+      sp([[x - H * 0.07, y + H * 0.2], [x, y + H * 0.46], [x + H * 0.07, y + H * 0.2]], '#fb923c');
+      sp([[x - H * 0.03, y + H * 0.2], [x, y + H * 0.36], [x + H * 0.03, y + H * 0.2]], '#fde047');
+    },
+    planet: (s, x, y) => {
+      const H = s.h * 1.4;
+      // planète ronde avec bandes et ombre, anneau devant et derrière
+      sc(x, y, H * 0.3, '#f97316');
+      sc(x - H * 0.04, y - H * 0.02, H * 0.22, '#fb923c');
+      for (let k = -1; k <= 1; k++) sl([[x - H * 0.28, y + k * H * 0.1], [x + H * 0.28, y + k * H * 0.1]], 'rgba(154, 52, 18, 0.4)', 2);
+      sc(x - H * 0.1, y - H * 0.1, H * 0.05, '#fed7aa');
+      ctx.strokeStyle = '#fde68a';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(x, y, H * 0.5, H * 0.14, -0.3, Math.PI, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(253, 230, 138, 0.5)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, H * 0.5, H * 0.14, -0.3, 0, Math.PI);
+      ctx.stroke();
+    },
+    tree: (s, x, y) => {
+      const H = s.h * 1.2;
+      // tronc avec écorce et houppier en plusieurs touffes
+      sr(x - H * 0.06, y - H * 0.02, H * 0.12, H * 0.42, '#78350f');
+      sl([[x - H * 0.02, y + H * 0.05], [x - H * 0.02, y + H * 0.35]], '#451a03', 1);
+      sc(x - H * 0.18, y - H * 0.1, H * 0.2, '#14532d');
+      sc(x + H * 0.18, y - H * 0.1, H * 0.2, '#14532d');
+      sc(x, y - H * 0.22, H * 0.26, '#15803d');
+      sc(x, y - H * 0.3, H * 0.16, '#22c55e');
+      sc(x - H * 0.1, y - H * 0.2, H * 0.06, '#86efac');
+    },
+    pine: (s, x, y) => {
+      const H = s.h * 1.6;
+      // trois étages de branches avec ombre, tronc et neige
+      sr(x - H * 0.04, y + H * 0.14, H * 0.08, H * 0.24, '#78350f');
+      sp([[x - H * 0.42, y + H * 0.22], [x, y - H * 0.06], [x + H * 0.42, y + H * 0.22]], '#14532d');
+      sp([[x - H * 0.34, y + H * 0.02], [x, y - H * 0.26], [x + H * 0.34, y + H * 0.02]], '#166534');
+      sp([[x - H * 0.24, y - H * 0.16], [x, y - H * 0.48], [x + H * 0.24, y - H * 0.16]], '#15803d');
+      sp([[x, y - H * 0.48], [x + H * 0.24, y - H * 0.16], [x + H * 0.04, y - H * 0.16]], '#14532d');
+      sp([[x - H * 0.1, y - H * 0.3], [x, y - H * 0.42], [x + H * 0.05, y - H * 0.3]], '#ffffff');
+    },
+    penguin: (s, x, y) => {
+      const H = s.h * 1.3;
+      // corps noir, ventre blanc, bec et pieds orange
+      se(x, y, H * 0.28, H * 0.38, 0, '#111827');
+      se(x, y + H * 0.06, H * 0.16, H * 0.28, 0, '#f8fafc');
+      se(x - H * 0.1, y - H * 0.26, H * 0.12, H * 0.1, 0, '#111827');
+      sp([[x - H * 0.05, y - H * 0.2], [x + H * 0.05, y - H * 0.2], [x, y - H * 0.13]], '#f97316');
+      sc(x - H * 0.04, y - H * 0.26, H * 0.02, '#ffffff');
+      sp([[x - H * 0.14, y + H * 0.36], [x - H * 0.02, y + H * 0.38], [x - H * 0.1, y + H * 0.42]], '#f97316');
+      sp([[x + H * 0.14, y + H * 0.36], [x + H * 0.02, y + H * 0.38], [x + H * 0.1, y + H * 0.42]], '#f97316');
+      sl([[x - H * 0.28, y - H * 0.1], [x - H * 0.36, y + H * 0.1]], '#111827', 4);
+      sl([[x + H * 0.28, y - H * 0.1], [x + H * 0.36, y + H * 0.1]], '#111827', 4);
+    },
+    bookstack: (s, x, y) => {
+      const H = s.h * 1.2;
+      // pile de quatre livres de tailles et couleurs différentes, avec pages visibles
+      const books = [[0.15, 0.82, '#dc2626'], [0.02, 0.7, '#16a34a'], [0.2, 0.6, '#fde047'], [-0.03, 0.5, '#2563eb']];
+      let yy = y + H * 0.38;
+      for (const [dx, w, col] of books) {
+        sr(x - H * w / 2 + dx * H, yy - H * 0.16, H * w, H * 0.16, col);
+        sr(x - H * w / 2 + dx * H + H * 0.02, yy - H * 0.13, H * w - H * 0.04, H * 0.03, '#fef3c7');
+        yy -= H * 0.16;
+      }
+    },
+    wizardhat: (s, x, y) => {
+      const H = s.h * 1.2;
+      // chapeau pointu violet avec bord, étoiles et ruban
+      sp([[x - H * 0.36, y + H * 0.3], [x + H * 0.04, y - H * 0.45], [x + H * 0.36, y + H * 0.3]], '#4c1d95');
+      sp([[x - H * 0.05, y + H * 0.3], [x + H * 0.04, y - H * 0.45], [x + H * 0.36, y + H * 0.3]], '#6d28d9');
+      se(x, y + H * 0.3, H * 0.44, H * 0.11, 0, '#312e81');
+      sr(x - H * 0.2, y + H * 0.14, H * 0.36, H * 0.07, '#facc15');
+      sc(x - H * 0.1, y - H * 0.05, H * 0.03, '#fde047');
+      sc(x + H * 0.1, y + H * 0.08, H * 0.025, '#fde047');
+      sc(x + H * 0.04, y - H * 0.42, H * 0.05, '#fde047');
+    },
+    crown: (s, x, y) => {
+      const H = s.h * 1.2, g = '#facc15', gD = '#a16207';
+      // couronne dorée avec trois fleurons, bijoux et bande
+      sp([[x - H * 0.38, y + H * 0.25], [x - H * 0.38, y - H * 0.12], [x - H * 0.19, y + H * 0.04], [x, y - H * 0.25], [x + H * 0.19, y + H * 0.04], [x + H * 0.38, y - H * 0.12], [x + H * 0.38, y + H * 0.25]], g);
+      sr(x - H * 0.38, y + H * 0.14, H * 0.76, H * 0.11, gD);
+      for (const [dx, dy, col] of [[-0.38, -0.12, '#dc2626'], [0, -0.25, '#3b82f6'], [0.38, -0.12, '#dc2626'], [-0.19, 0.04, '#16a34a'], [0.19, 0.04, '#16a34a']]) sc(x + dx * H, y + dy * H, H * 0.045, col);
+      sc(x, y + H * 0.19, H * 0.04, '#fde047');
+    },
+    lemon: (s, x, y) => {
+      const H = s.h * 1.2;
+      // citron ovale avec pointes, peau granuleuse et tranche
+      se(x, y, H * 0.4, H * 0.3, -0.4, '#facc15');
+      se(x - H * 0.04, y - H * 0.04, H * 0.34, H * 0.25, -0.4, '#fde047');
+      sp([[x - H * 0.44, y + H * 0.18], [x - H * 0.52, y + H * 0.14], [x - H * 0.42, y + H * 0.08]], '#65a30d');
+      for (const [dx, dy] of [[0.1, -0.08], [-0.06, 0.1], [0.2, 0.06]]) sc(x + dx * H, y + dy * H, H * 0.012, '#a16207');
+    },
+    grapes: (s, x, y) => {
+      const H = s.h * 1.2;
+      // grappe : grains violets brillants en pyramide, feuille et tige
+      sl([[x, y - H * 0.42], [x, y - H * 0.25]], '#65a30d', 3);
+      sp([[x, y - H * 0.4], [x + H * 0.28, y - H * 0.3], [x + H * 0.12, y - H * 0.24]], '#84cc16');
+      const pts = [[-0.22, -0.2], [0.22, -0.2], [0, -0.2], [-0.22, 0.0], [0.22, 0.0], [0, 0.0], [-0.12, 0.2], [0.12, 0.2], [0, 0.4]];
+      for (const [dx, dy] of pts) {
+        sc(x + dx * H, y + dy * H, H * 0.12, '#7e22ce');
+        sc(x + dx * H - H * 0.04, y + dy * H - H * 0.04, H * 0.035, '#e9d5ff');
+      }
+    },
+    cookie: (s, x, y) => {
+      const H = s.h * 1.1;
+      // biscuit doré avec pépites de chocolat et bord cuit
+      sc(x, y, H * 0.42, '#b45309');
+      sc(x, y, H * 0.38, '#d97706');
+      sc(x - H * 0.04, y - H * 0.04, H * 0.3, '#f59e0b');
+      for (const [dx, dy] of [[-0.18, -0.1], [0.12, -0.2], [0.2, 0.12], [-0.08, 0.18], [0.04, -0.02], [0.18, -0.08]]) sc(x + dx * H, y + dy * H, H * 0.07, '#451a03');
+    },
+    macaron: (s, x, y) => {
+      const H = s.h * 1.2;
+      // deux coques roses et crème avec garniture
+      se(x, y - H * 0.16, H * 0.36, H * 0.16, 0, '#f9a8d4');
+      se(x, y + H * 0.16, H * 0.36, H * 0.16, 0, '#f9a8d4');
+      sr(x - H * 0.34, y - H * 0.02, H * 0.68, H * 0.1, '#fdf2f8');
+      sr(x - H * 0.34, y - H * 0.02, H * 0.68, H * 0.02, '#fbcfe8');
+      for (let k = 0; k < 4; k++) sc(x - H * 0.2 + k * H * 0.13, y - H * 0.16, H * 0.02, '#fdf2f8');
+    },
+    choco: (s, x, y) => {
+      const H = s.h * 1.4;
+      // tablette : carrés avec reflet et emballage doré à moitié ouvert
+      sr(x - H * 0.36, y - H * 0.2, H * 0.72, H * 0.4, '#78350f');
+      sr(x - H * 0.36, y - H * 0.2, H * 0.72, H * 0.04, '#a16207');
+      for (let i = 1; i < 4; i++) sl([[x - H * 0.36 + i * H * 0.18, y - H * 0.2], [x - H * 0.36 + i * H * 0.18, y + H * 0.2]], '#451a03', 1.5);
+      sl([[x - H * 0.36, y], [x + H * 0.36, y]], '#451a03', 1.5);
+      sr(x - H * 0.3, y - H * 0.16, H * 0.05, H * 0.1, 'rgba(255, 255, 255, 0.2)');
+      sp([[x + H * 0.36, y - H * 0.2], [x + H * 0.5, y - H * 0.26], [x + H * 0.5, y + H * 0.26], [x + H * 0.36, y + H * 0.2]], '#fbbf24');
     },
   };
 
