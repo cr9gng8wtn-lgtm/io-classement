@@ -257,6 +257,7 @@
     <div id="rank-board" class="rank-block hidden">
       <p class="stat" id="rank-status"></p>
       <p class="stat" id="rank-me"></p>
+      <p class="stat" id="rank-countdown"></p>
       <ol id="rank-list" class="rank-list"></ol>
     </div>
     <button class="secondary" id="rank-back">Retour</button>
@@ -779,6 +780,24 @@
     try { body = (await r.text()).slice(0, 200); } catch (e) {}
     return `erreur ${r.status}` + (body ? ' : ' + body : '');
   }
+  // Décompte en direct jusqu'à la fin de la semaine (lundi 00 h, heure de Paris)
+  function secondsToWeekEnd() {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+    const get = (t) => parts.find((x) => x.type === t).value;
+    const jours = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const jour = jours.indexOf(get('weekday'));
+    const into = jour * 86400 + Number(get('hour')) * 3600 + Number(get('minute')) * 60 + Number(get('second'));
+    return 7 * 86400 - into;
+  }
+  function renderRankCountdown() {
+    const s = secondsToWeekEnd();
+    const j = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    $('rank-countdown').textContent = `Fin de la semaine dans ${j} j ${pad(h)} h ${pad(m)} min ${pad(sec)} s`;
+  }
+  renderRankCountdown();
+  setInterval(renderRankCountdown, 1000);
+
   // Les 100 meilleurs joueurs, par niveau puis par XP
   async function fetchRanking() {
     // Clé passée dans l'URL : requête simple, sans en-têtes spéciaux (moins de blocages du navigateur)
