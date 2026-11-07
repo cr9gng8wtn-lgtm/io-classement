@@ -758,7 +758,7 @@
   // Un classement mondial a besoin d'une base en ligne partagée par tous les joueurs.
   // Ici : Supabase (gratuit). Remplis url et key après avoir créé le projet (voir classement_supabase.sql).
   // Tant qu'ils sont vides, le classement reste éteint et rien n'est envoyé.
-  const RANK = { url: 'https://mtpaqoevhshjxkavhfwz.supabase.co', key: 'sb_publishable_lU3bywm6wEjrqIkM6-eM0w_dkJESHgs', table: 'players' };
+  const RANK = { url: 'https://mtpaqoevhshjxkavhfwz.supabase.co', key: 'sb_publishable_lU3bywm6wEjrqIkM6-eM0w_dkJESHgs', table: 'classement' };
   const RANK_EVERY = 5000; // rafraîchissement en direct, en ms
   let rankTimer = null;
   let rankBusy = false;
@@ -782,20 +782,52 @@
   // Les 100 meilleurs joueurs, par niveau puis par XP
   async function fetchRanking() {
     // Clé passée dans l'URL : requête simple, sans en-têtes spéciaux (moins de blocages du navigateur)
-    const url = `${RANK.url}/rest/v1/${RANK.table}?select=id,pseudo,level,xp&order=level.desc,xp.desc&limit=100&apikey=${encodeURIComponent(RANK.key)}`;
+    const url = `${RANK.url}/rest/v1/${RANK.table}?select=user_id,pseudo,level,xp&order=level.desc,xp.desc&limit=100&apikey=${encodeURIComponent(RANK.key)}`;
     const r = await fetch(url);
     if (!r.ok) throw new Error(await rankError(r));
     return r.json();
   }
-  // Envoie ton niveau : crée ta ligne, ou la met à jour si elle existe déjà
+  // Session anonyme : un compte Supabase sans email, créé la première fois.
+  // Elle reste dans le navigateur ; le jeu la renouvelle quand elle expire.
+  const AUTH_KEY = 'io-proto-auth';
+  function readAuth() {
+    try { return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); } catch (e) { return null; }
+  }
+  function writeAuth(a) {
+    try { localStorage.setItem(AUTH_KEY, JSON.stringify(a)); } catch (e) {}
+  }
+  function sessionFrom(j) {
+    return { token: j.access_token, refresh: j.refresh_token, expires: Math.floor(Date.now() / 1000) + (j.expires_in || 3600), uid: j.user && j.user.id };
+  }
+  async function authSession(force) {
+    let a = readAuth();
+    const now = Math.floor(Date.now() / 1000);
+    if (!force && a && a.expires > now + 60) return a;
+    if (a && a.refresh) {
+      const r = await fetch(`${RANK.url}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST', headers: rankHeaders(), body: JSON.stringify({ refresh_token: a.refresh })
+      });
+      if (r.ok) { a = sessionFrom(await r.json()); writeAuth(a); return a; }
+    }
+    const r = await fetch(`${RANK.url}/auth/v1/signup`, { method: 'POST', headers: rankHeaders(), body: '{}' });
+    if (!r.ok) throw new Error(await rankError(r));
+    a = sessionFrom(await r.json());
+    writeAuth(a);
+    return a;
+  }
+  function myUid() { const a = readAuth(); return a ? a.uid : null; }
+
+  // Envoie ton score : ta ligne (liée à ton compte) est créée ou mise à jour
   async function pushScore() {
     if (!rankEnabled() || !save.pseudo) return;
-    const body = { id: save.playerId, pseudo: save.pseudo, level: levelInfo().level, xp: save.xp, updated_at: new Date().toISOString() };
-    const r = await fetch(`${RANK.url}/rest/v1/${RANK.table}?on_conflict=id`, {
+    let a = await authSession(false);
+    const send = () => fetch(`${RANK.url}/rest/v1/${RANK.table}?on_conflict=user_id`, {
       method: 'POST',
-      headers: rankHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
-      body: JSON.stringify(body)
+      headers: rankHeaders({ Authorization: `Bearer ${a.token}`, Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify({ user_id: a.uid, pseudo: save.pseudo, level: levelInfo().level, xp: save.xp })
     });
+    let r = await send();
+    if (r.status === 401) { a = await authSession(true); r = await send(); }
     if (!r.ok) throw new Error(await rankError(r));
   }
 
@@ -805,7 +837,7 @@
     ol.innerHTML = '';
     rows.forEach((r, i) => {
       const li = document.createElement('li');
-      if (r.id === save.playerId) li.className = 'me';
+      if (r.user_id === myUid()) li.className = 'me';
       const pos = document.createElement('span');
       pos.className = 'pos';
       pos.textContent = `${i + 1}.`;
