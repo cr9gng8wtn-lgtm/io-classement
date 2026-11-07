@@ -83,6 +83,8 @@
     .gift-intro svg { width: 100%; height: 100%; overflow: visible; }
     .gift-intro .rays { transform-box: view-box; transform-origin: 60px 60px; animation: giftRays 1.4s ease-out .9s both; }
     @keyframes giftDrop { 0% { transform: translateY(-70vh) rotate(14deg); opacity: 0; } 15% { opacity: 1; } 70% { transform: translateY(0) rotate(14deg); } 85% { transform: translateY(-10px) rotate(14deg); } 100% { transform: translateY(0) rotate(14deg); } }
+    .gift-intro .ribbon { stroke-dasharray: 100; stroke-dashoffset: 100; animation: ribbonDraw .9s ease-out .3s forwards; }
+    @keyframes ribbonDraw { to { stroke-dashoffset: 0; } }
     @keyframes giftRays { 0% { transform: scale(.3); opacity: 0; } 40% { opacity: 1; } 100% { transform: scale(1.25); opacity: 0; } }
     @keyframes giftExit { 0% { transform: translate(0, 0) rotate(14deg) scale(1); opacity: 1; } 100% { transform: translate(60vw, -70vh) rotate(194deg) scale(.3); opacity: 0; } }
     body.gift-blur canvas { filter: blur(7px) brightness(.45); }
@@ -4530,6 +4532,30 @@
     setTimeout(() => { el.remove(); document.body.classList.remove('gift-blur'); }, 2500);
   }
 
+  // Même entrée que la boutique, avec un ruban qui se déroule pour les trainées
+  function playRibbonIntro() {
+    const old = document.querySelector('.gift-intro');
+    if (old) old.remove();
+    let rays = '';
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI / 6;
+      const x1 = 60 + Math.cos(a) * 56, y1 = 60 + Math.sin(a) * 56;
+      const x2 = 60 + Math.cos(a) * 74, y2 = 60 + Math.sin(a) * 74;
+      rays += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+    }
+    const el = document.createElement('div');
+    el.className = 'gift-intro';
+    el.innerHTML =
+      '<svg viewBox="0 0 120 120" aria-hidden="true">' +
+      '<g class="rays" fill="none" stroke="#fde047" stroke-width="3" stroke-linecap="round">' + rays + '</g>' +
+      '<path class="ribbon" pathLength="100" d="M18 92 C 6 60, 40 30, 60 52 S 104 84, 96 40" fill="none" stroke="#f472b6" stroke-width="9" stroke-linecap="round"/>' +
+      '<path class="ribbon" pathLength="100" d="M18 92 C 6 60, 40 30, 60 52 S 104 84, 96 40" fill="none" stroke="#fbcfe8" stroke-width="2.5" stroke-linecap="round" transform="translate(-2 -2)"/>' +
+      '</svg>';
+    document.body.appendChild(el);
+    document.body.classList.add('gift-blur');
+    setTimeout(() => { el.remove(); document.body.classList.remove('gift-blur'); }, 2500);
+  }
+
   // ---------- Boutons ----------
   $('btn-play').onclick = () => { dailyMode = false; startRun(); };
   $('btn-again').onclick = () => {
@@ -4562,7 +4588,7 @@
   $('detail-look').width = 120 * (window.devicePixelRatio || 1);
   $('detail-look').height = $('detail-look').width;
   $('level-box').onclick = () => { renderLevels(); show('levels'); };
-  $('btn-trainees').onclick = () => { $('trainees-msg').textContent = ''; renderTrainees(); show('trainees'); };
+  $('btn-trainees').onclick = () => { $('trainees-msg').textContent = ''; renderTrainees(); show('trainees'); playRibbonIntro(); };
   $('btn-daily').onclick = () => { $('daily-msg').textContent = ''; renderDaily(); show('daily'); };
   $('buy-skin').onclick = () => buyBox('skin');
   $('buy-trainee').onclick = () => buyBox('trainee');
