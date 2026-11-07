@@ -1242,7 +1242,7 @@
         sprite: K.rock ? SPRITES[K.rock] : null
       },
       decorCount: K.n || d.dec.n,
-      decorH: K.h || d.dec.h,
+      decorH: K.h ? [K.h[0] * 1.8, K.h[1] * 1.8] : d.dec.h,
       decorList: K.dec ? K.dec.map(n => SPRITES[n]) : null,
       drawDecor: (s, sx, sy, now) => dec(s, sx, sy, now, d.dec.c1, d.dec.c2),
       particles: {
@@ -3847,7 +3847,7 @@
     ctx.stroke();
     if (st.sprite) {
       // Objet posé sur le rocher : la collision reste circulaire
-      st.sprite({ h: r * 0.8, phase: r * 0.1 }, sx, sy, now);
+      st.sprite({ h: r * 1.0, phase: r * 0.1 }, sx, sy, now);
     } else if (st.detail === 'canopy') {
       // Cime d'arbre vue du dessus, avec son tronc
       ctx.fillStyle = 'rgba(190, 242, 100, 0.25)';
