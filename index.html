@@ -2999,9 +2999,18 @@
           }
         }
         path.push(ctrl[ctrl.length - 1]);
+        // Animation : la queue ondule et la tête se balance, comme une trainée qui suit
+        const ph = now / 420;
+        const n2 = path.length;
+        for (let i = 0; i < n2; i++) {
+          const k = i / (n2 - 1);
+          const wave = Math.sin(ph - k * 4.2) * 3.5 * k;
+          path[i] = { x: path[i].x + wave * 0.7, y: path[i].y - wave * 0.4 };
+        }
+        const headBob = Math.sin(ph) * 1.2;
         paintBand(c2, path, bandColor, 9, item.color, item.band);
         paintBandFx(c2, path, 9, item.color, item.rarity, now);
-        paintLook(46, 24, 10, sk, now, c2, 0.35);
+        paintLook(46, 24 + headBob, 10, sk, now, c2, 0.35);
       } else {
         paintLook(36, 36, 20, item, now, c2, 0.35);
       }
