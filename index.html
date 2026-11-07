@@ -1,0 +1,2161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Prototype jeu .io</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0f172a; font-family: system-ui, sans-serif; color: #e2e8f0; }
+    canvas { display: block; width: 100vw; height: 100vh; touch-action: none; transition: filter .4s ease, transform .4s ease; }
+    /* Hors partie : la map est floutée en fond */
+    body.blur canvas { filter: blur(5px) brightness(.55); transform: scale(1.06); }
+    body.blur canvas.look { filter: none; transform: none; }
+    body.blur canvas.map-logo { filter: none; transform: none; }
+    #level-box { cursor: pointer; }
+    .map-list { display: flex; flex-direction: column; gap: 12px; max-height: 52vh; overflow-y: auto; padding: 4px; }
+    .map-card { background: #1e293b; border-radius: 14px; padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .map-card.current { outline: 2px solid #facc15; }
+    .map-card canvas.map-logo { width: 220px; max-width: 100%; height: auto; aspect-ratio: 220 / 120; border-radius: 10px; }
+    .map-card.locked { opacity: .55; }
+    .map-unknown { width: 220px; max-width: 100%; aspect-ratio: 220 / 120; border-radius: 10px; background: #0f172a; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700; color: #475569; }
+    .hidden { display: none !important; }
+    #hud { position: fixed; top: 12px; left: 14px; right: 14px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; font: 600 17px system-ui, sans-serif; text-shadow: 0 1px 3px #000; }
+    #hud button { pointer-events: auto; font-size: 14px; padding: 8px 12px; }
+    /* Mini-carte en haut à droite, sous le bouton Menu, pendant la partie */
+    #mini { position: fixed; right: 12px; top: 60px; width: 150px; height: 150px; border-radius: 10px; box-shadow: 0 0 0 2px #334155; pointer-events: none; }
+    /* Compte à rebours au lancement */
+    #countdown { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font: 800 120px system-ui, sans-serif; color: #facc15; text-shadow: 0 4px 24px #000; pointer-events: none; }
+    #countdown.pop { animation: pop .7s ease-out; }
+    @keyframes pop { 0% { transform: scale(2); opacity: 0; } 40% { transform: scale(1); opacity: 1; } 100% { transform: scale(.9); opacity: 0; } }
+    .panel { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.88); overflow-y: auto; }
+    .box { width: min(460px, 100%); display: flex; flex-direction: column; gap: 12px; }
+    h1, h2 { margin: 0; text-align: center; }
+    p { margin: 0; text-align: center; }
+    small { color: #94a3b8; }
+    button { font: 600 17px system-ui, sans-serif; padding: 12px 16px; border: 0; border-radius: 12px; background: #38bdf8; color: #0f172a; cursor: pointer; }
+    button.secondary { background: #334155; color: #e2e8f0; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ----- Menu principal : fond = map floutée ----- */
+    #menu { display: block; background: none; padding: 0; overflow: hidden; }
+    .menu-box { position: fixed; top: 16px; right: 16px; width: min(42vw, 230px); padding: 12px 14px; border-radius: 16px; border: 2px solid #22d3ee; background: rgba(15, 23, 42, 0.7); box-shadow: 0 0 14px rgba(34, 211, 238, .35); }
+    .menu-box strong { display: block; font-size: 18px; margin-bottom: 6px; }
+    .bar { height: 10px; border-radius: 6px; background: #334155; overflow: hidden; margin-bottom: 4px; }
+    .bar > div { height: 100%; width: 0; background: #22d3ee; transition: width .4s; }
+    .menu-btn { position: fixed; border: 2px solid #22d3ee; border-radius: 16px; background: rgba(15, 23, 42, 0.7); color: #e2e8f0; box-shadow: 0 0 14px rgba(34, 211, 238, .35); font: 600 15px system-ui, sans-serif; padding: 10px 12px; min-height: 64px; width: min(28vw, 170px); min-width: 96px; }
+    #btn-daily { top: 16px; left: 16px; width: min(42vw, 230px); }
+    #btn-skins { bottom: 16px; left: 16px; }
+    /* Fiche d'un skin ou d'une trainée */
+    .gem { width: 1em; height: 1em; vertical-align: -0.12em; display: inline-block; }
+    #detail-look { width: 120px; height: 120px; display: block; margin: 4px auto 8px; }
+    .detail-name { font-size: 22px; font-weight: 700; text-align: center; margin: 0; }
+    #btn-shop { bottom: 16px; left: 50%; transform: translateX(-50%); }
+    #btn-trainees { bottom: 16px; right: 16px; }
+    #btn-play { position: fixed; left: 50%; top: 50%; width: min(70vw, 300px); height: 130px; transform: translate(-50%, -50%); border: 4px solid #22d3ee; border-radius: 24px; background: rgba(15, 23, 42, 0.6); color: #facc15; font: 800 56px system-ui, sans-serif; letter-spacing: 4px; box-shadow: 0 0 28px rgba(34, 211, 238, .6); animation: breathe 2s ease-in-out infinite; }
+    @keyframes breathe { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.05); } }
+
+    /* ----- Écrans secondaires ----- */
+    .card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: #1e293b; color: #f8fafc; }
+    .card small { color: inherit; opacity: .85; }
+    .card .info { flex: 1; }
+    .card button { flex-shrink: 0; }
+    /* Grille de 3 rectangles en portrait, pour les skins et les trainées */
+    .collection { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .tile { position: relative; overflow: hidden; aspect-ratio: 3 / 4; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 10px 6px; border-radius: 12px; background: #1e293b; color: #f8fafc; text-align: center; }
+    .tile small { color: inherit; opacity: .85; font-size: 11px; }
+    .tile strong { font-size: 13px; }
+    .tile.clickable { cursor: pointer; }
+    .tile.locked { opacity: .45; }
+    .tile.equipped { outline: 3px solid #facc15; }
+    .tile .look { width: 72px; height: 72px; }
+    /* Trainée non débloquée : contenu grisé (sans barre rouge) */
+    .tile.barred > * { opacity: .6; }
+    .tile.barred > canvas.look { opacity: 1; }
+    .card.clickable { cursor: pointer; }
+    .card.locked { opacity: .45; }
+    .card.equipped { outline: 3px solid #facc15; }
+    /* Fond de carte selon la rareté (après les styles de base) */
+    .r-commun { background: #6b7280; }
+    .r-rare { background: #2563eb; }
+    .r-epique { background: #7c3aed; }
+    .r-mythique { background: #dc2626; }
+    .r-legendaire { background: #facc15; color: #1e293b; }
+    .r-aura { background: linear-gradient(90deg, #1e3a8a, #f97316, #dc2626, #facc15, #1e3a8a); background-size: 300% 100%; animation: auraMove 6s linear infinite; }
+    @keyframes auraMove { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+    .swatch { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; border: 3px solid #f8fafc; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+    .day { padding: 12px 8px; border-radius: 12px; background: #1e293b; text-align: center; font-size: 14px; }
+    .day.done { opacity: .5; }
+    .day.avail { outline: 3px solid #facc15; }
+    #daily-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); max-height: 50vh; overflow-y: auto; padding: 4px; }
+    .msg { min-height: 1.4em; color: #facc15; text-align: center; }
+    .stat { color: #cbd5e1; text-align: center; }
+    /* Bouton carré « réglages » (écrou) et curseurs de volume */
+    #btn-settings { top: 180px; right: 16px; width: 56px; height: 56px; min-width: 0; min-height: 0; padding: 0; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+    #btn-settings svg { width: 30px; height: 30px; color: #e2e8f0; }
+    .slider-row { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: #1e293b; color: #f8fafc; text-align: left; }
+    .slider-row label { display: flex; justify-content: space-between; font-weight: 600; }
+    .slider-row input { width: 100%; accent-color: #22d3ee; }
+    /* Classement mondial : bouton sous « Récompenses quotidiennes », liste en direct */
+    #btn-ranking { top: 112px; left: 16px; width: min(42vw, 230px); }
+    .slider-row input[type=text] { width: 100%; padding: 10px; border-radius: 10px; border: 2px solid #334155; background: #0f172a; color: #f8fafc; font: 600 16px system-ui, sans-serif; }
+    .live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 8px #4ade80; margin-right: 4px; vertical-align: middle; }
+    .rank-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 42vh; overflow-y: auto; }
+    .rank-list li { display: grid; grid-template-columns: 2.4em minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: #1e293b; color: #f8fafc; text-align: left; font-variant-numeric: tabular-nums; }
+    .rank-list li.me { outline: 2px solid #facc15; }
+    .rank-list .pos { color: #94a3b8; }
+    .rank-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .rank-list .lv { color: #22d3ee; font-weight: 700; }
+    .warn { color: #fbbf24; text-align: center; font-size: 14px; font-weight: 600; margin: 0; }
+    .rank-block:not(.hidden) { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+  </style>
+</head>
+<body class="blur">
+<canvas id="game"></canvas>
+
+<div id="hud" class="hidden">
+  <span id="hud-text"></span>
+  <button id="btn-quit" class="secondary">Menu</button>
+</div>
+
+<canvas id="mini" class="hidden"></canvas>
+<div id="countdown" class="hidden"></div>
+
+<div id="menu" class="panel">
+  <div id="level-box" class="menu-box">
+    <strong id="level-text"></strong>
+    <div class="bar"><div id="level-bar"></div></div>
+    <small id="level-xp"></small><br>
+    <small id="menu-stats"></small>
+  </div>
+  <button id="btn-daily" class="menu-btn">Récompenses quotidiennes <span id="daily-badge"></span></button>
+  <button id="btn-ranking" class="menu-btn">Classement mondial</button>
+  <button id="btn-play">PLAY</button>
+  <button id="btn-skins" class="menu-btn">Skins</button>
+  <button id="btn-shop" class="menu-btn">Boutique</button>
+  <button id="btn-trainees" class="menu-btn">Trainées</button>
+  <button id="btn-settings" class="menu-btn" aria-label="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="3.5" stroke-dasharray="2.4 2.2"/><circle cx="12" cy="12" r="6" fill="currentColor"/><circle cx="12" cy="12" r="2.4" fill="#0f172a"/></svg></button>
+</div>
+
+<div id="shop" class="panel hidden">
+  <div class="box">
+    <h2>Boutique</h2>
+    <p class="stat" id="shop-coins"></p>
+    <div class="card">
+      <div class="info">
+        <strong>Boîte à skins</strong><br>
+        <small>Un skin au hasard parmi 15.</small><br>
+        <small class="odds" id="odds-skin"></small>
+      </div>
+      <button id="buy-skin"></button>
+    </div>
+    <div class="card">
+      <div class="info">
+        <strong>Boîte à trainées</strong><br>
+        <small>Une trainée au hasard parmi 15.</small><br>
+        <small class="odds" id="odds-trainee"></small>
+      </div>
+      <button id="buy-trainee"></button>
+    </div>
+    <p class="msg" id="shop-msg"></p>
+    <button class="secondary" data-back>Retour</button>
+  </div>
+</div>
+
+<div id="skins" class="panel hidden">
+  <div class="box">
+    <h2>Skins</h2>
+    <div id="skins-list" class="collection"></div>
+    <button class="secondary" data-back>Retour</button>
+  </div>
+</div>
+
+<div id="trainees" class="panel hidden">
+  <div class="box">
+    <h2>Trainées</h2>
+    <p class="stat" id="trainees-count"></p>
+    <div id="trainees-list" class="collection"></div>
+    <p class="msg" id="trainees-msg"></p>
+    <button class="secondary" data-back>Retour</button>
+  </div>
+</div>
+
+<div id="detail" class="panel hidden">
+  <div class="box">
+    <p class="stat" id="detail-gems"></p>
+    <canvas id="detail-look" class="look"></canvas>
+    <p class="detail-name" id="detail-name"></p>
+    <p class="stat" id="detail-rarity"></p>
+    <p class="stat" id="detail-level"></p>
+    <p class="stat"><small id="detail-effect"></small></p>
+    <button id="detail-equip"></button>
+    <button id="detail-up"></button>
+    <p class="msg" id="detail-msg"></p>
+    <button class="secondary" id="detail-back">Retour</button>
+  </div>
+</div>
+
+<div id="settings" class="panel hidden">
+  <div class="box">
+    <h2>Paramètres</h2>
+    <div class="slider-row">
+      <label for="vol-sfx">Effets sonores <span id="vol-sfx-val"></span></label>
+      <input type="range" id="vol-sfx" min="0" max="100" step="5">
+    </div>
+    <div class="slider-row">
+      <label for="vol-music">Musique <span id="vol-music-val"></span></label>
+      <input type="range" id="vol-music" min="0" max="100" step="5">
+    </div>
+    <button class="secondary" data-back>Retour</button>
+  </div>
+</div>
+
+<div id="ranking" class="panel hidden">
+  <div class="box">
+    <h2>Classement mondial</h2>
+    <div id="rank-form" class="rank-block">
+      <p class="stat">Choisis ton pseudo pour apparaître dans le classement.</p>
+      <div class="slider-row">
+        <label for="rank-pseudo">Ton pseudo</label>
+        <input id="rank-pseudo" type="text" maxlength="16" autocomplete="off" placeholder="3 à 16 caractères">
+      </div>
+      <p class="warn">Attention : une fois enregistré, ton pseudo ne pourra plus être changé.</p>
+      <button id="rank-save">Enregistrer mon pseudo</button>
+      <p class="msg" id="rank-msg"></p>
+    </div>
+    <div id="rank-board" class="rank-block hidden">
+      <p class="stat" id="rank-status"></p>
+      <p class="stat" id="rank-me"></p>
+      <ol id="rank-list" class="rank-list"></ol>
+    </div>
+    <button class="secondary" id="rank-back">Retour</button>
+  </div>
+</div>
+
+<div id="daily" class="panel hidden">
+  <div class="box">
+    <h2>Récompenses quotidiennes</h2>
+    <p class="stat">Connecte-toi chaque jour pendant 30 jours. Si tu rates un jour, le cycle repart à zéro.</p>
+    <div id="daily-grid" class="grid"></div>
+    <p class="stat"><small>Boîtes mystère : jours 7, 14, 21 et 28 (2 au jour 30). Chaque boîte : 25 % skin · 25 % trainée · 50 % rien.</small></p>
+    <button id="btn-claim">Récupérer la récompense</button>
+    <p class="msg" id="daily-msg"></p>
+    <p class="stat" id="daily-week-msg"></p>
+    <button class="secondary" data-back>Retour</button>
+  </div>
+</div>
+
+<div id="levels" class="panel hidden">
+  <div class="box">
+    <h2>Niveau <span id="lv-title"></span></h2>
+    <p class="stat" id="lv-current"></p>
+    <div id="map-list" class="map-list"></div>
+    <button class="secondary" data-back>Retour</button>
+  </div>
+</div>
+
+<div id="gameover" class="panel hidden">
+  <div class="box">
+    <h2>Perdu !</h2>
+    <p id="go-score"></p>
+    <p class="msg" id="go-earned"></p>
+    <button id="btn-again">Rejouer</button>
+    <button class="secondary" id="btn-go-menu">Menu</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- Réglages ----------
+  const WORLD = 3600;        // taille de la map (px)
+  const FOOD_COUNT = 900;
+  const ENEMY_COUNT = 30;
+  const ROCK_COUNT = 26;     // récifs : obstacles qu'on ne traverse pas
+  const CURRENT_COUNT = 6;   // zones de courant qui poussent le joueur
+  const CURRENT_PUSH = 70;   // vitesse de poussée du courant (px/s)
+  const SEAWEED_COUNT = 90;  // algues de décor
+  const BUBBLE_COUNT = 70;   // bulles qui montent
+
+  // Texture de l'océan : grain et ondulations dessinés une fois, puis répétés sur la carte
+  const oceanTex = document.createElement('canvas');
+  oceanTex.width = 256;
+  oceanTex.height = 256;
+  const tc = oceanTex.getContext('2d');
+  const tr = (a, b) => a + Math.random() * (b - a);
+  for (let i = 0; i < 260; i++) {
+    const x = tr(0, 256), y = tr(0, 256), r = tr(0.5, 1.6);
+    const light = Math.random() < 0.6;
+    tc.fillStyle = light ? `rgba(224, 242, 254, ${tr(0.04, 0.12)})` : `rgba(2, 6, 23, ${tr(0.08, 0.18)})`;
+    // on dessine aussi les bords opposés pour que la répétition soit sans couture
+    for (const dx of [-256, 0, 256]) {
+      for (const dy of [-256, 0, 256]) {
+        tc.beginPath();
+        tc.arc(x + dx, y + dy, r, 0, Math.PI * 2);
+        tc.fill();
+      }
+    }
+  }
+  tc.strokeStyle = 'rgba(224, 242, 254, 0.06)';
+  tc.lineWidth = 1.5;
+  for (const base of [48, 128, 208]) {
+    tc.beginPath();
+    for (let x = 0; x <= 256; x += 4) {
+      const y = base + Math.sin((x / 256) * Math.PI * 4 + base) * 5;
+      if (x === 0) tc.moveTo(x, y); else tc.lineTo(x, y);
+    }
+    tc.stroke();
+  }
+  let oceanPattern = null; // créé à la première image, quand le contexte est prêt
+  const FOLLOW_GAP = 42;
+  const MAX_FOLLOWERS = 3;
+  const PLAYER_SPEED = 145;  // vitesse constante du joueur (px/s)
+  const CHASE_SPEED = 85;    // vitesse des ennemis plus gros qui te poursuivent (px/s)
+  const FOOD_PER_GROWTH = 5; // on grossit toutes les 5 graines mangées
+  const FOOD_GROWTH = 1;     // gain de rayon à chaque palier de 5 graines
+  const ENEMY_GROWTH = 0.1;  // en mangeant un ennemi, on gagne 10 % de son rayon
+  const LEVEL_XP = 500;      // XP nécessaire pour passer au niveau suivant
+  const MINI = 150;          // taille de la mini-carte (px)
+  const SHOP_PRICE = { skin: 3500, trainee: 2750 };
+  const DAILY_BOX = { skin: 0.25, trainee: 0.25 }; // le reste (50 %) = rien
+
+  // Rareté : même table pour la boutique, la boîte du jour 7 et les deux listes
+  const RARITIES = {
+    commun:     { label: 'Commun',     weight: 40 },
+    rare:       { label: 'Rare',       weight: 30 },
+    epique:     { label: 'Épique',     weight: 20 },
+    mythique:   { label: 'Mythique',   weight: 6.5 },
+    legendaire: { label: 'Légendaire', weight: 3 },
+    aura:       { label: 'Aura',       weight: 0.5 }
+  };
+  const RARITY_ORDER = ['commun', 'rare', 'epique', 'mythique', 'legendaire', 'aura'];
+  // Remboursement d'un doublon, selon la rareté
+  const DUPE_REFUND = { commun: 200, rare: 400, epique: 800, mythique: 1500, legendaire: 2500, aura: 4000 };
+  const DUPE_GEMS = 10;                             // gemmes données pour un doublon
+  const UPGRADE_COST = [10, 25, 60, 120, 250];      // coût pour passer au niveau suivant (1 à 5)
+  const UPGRADE_MAX = 5;
+  const GEM_EVERY = 25;          // 1 gemme gagnée par tranche de 25 points de score
+  const MAGNET_PER_LEVEL = 8;    // skin : aimant, +8 px de portée par niveau (la nourriture proche vient vers toi)
+  const GROWTH_PER_LEVEL = 0.1;  // skin : croissance, +10 % par niveau à chaque palier de graines
+  const TRAINEE_BONUS = 10;      // trainée équipée : +10 pièces par partie et par niveau
+  // Gemme violette : icône de la monnaie (gemmes)
+  const GEM = '<svg class="gem" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10l4 6-9 12L3 9z" fill="#a855f7"/><path d="M7 3h10l-2.5 6h-5z" fill="#c084fc"/><path d="M3 9h18M9.5 9L12 21l2.5-12" fill="none" stroke="#f3e8ff" stroke-width="1" stroke-linejoin="round"/></svg>';
+
+  // pattern = motif dessiné sur le cercle
+  const SKINS = [
+    { id: 'blue',    name: 'Eau',      rarity: 'commun',     color: '#38bdf8', stroke: '#e0f2fe', pattern: 'plain' },
+    { id: 'green',   name: 'Terre',      rarity: 'commun',     color: '#4ade80', stroke: '#14532d', pattern: 'dots' },
+    { id: 'pink',    name: 'Brise',      rarity: 'commun',     color: '#f472b6', stroke: '#fff1f2', pattern: 'stripes' },
+    { id: 'orange',  name: 'Magma',    rarity: 'rare',       color: '#fb923c', stroke: '#7c2d12', pattern: 'cracks' },
+    { id: 'violet',  name: 'Ombre',    rarity: 'rare',       color: '#a78bfa', stroke: '#4c1d95', pattern: 'eclipse' },
+    { id: 'turq',    name: 'Tempête', rarity: 'rare',       color: '#2dd4bf', stroke: '#ecfeff', pattern: 'swirl' },
+    { id: 'emerald', name: 'Forêt',  rarity: 'epique',     color: '#059669', stroke: '#d1fae5', pattern: 'leaves' },
+    { id: 'magenta', name: 'Éther',   rarity: 'epique',     color: '#c026d3', stroke: '#fae8ff', pattern: 'orbit' },
+    { id: 'amber',   name: 'Sable',     rarity: 'epique',     color: '#d97706', stroke: '#fef3c7', pattern: 'dunes' },
+    { id: 'braise',  name: 'Brasier',    rarity: 'mythique',   color: '#b91c1c', stroke: '#fb923c', pattern: 'flame' },
+    { id: 'glacier', name: 'Glace',   rarity: 'mythique',   color: '#0ea5e9', stroke: '#f0f9ff', pattern: 'crystal' },
+    { id: 'neon',    name: 'Foudre',      rarity: 'mythique',   color: '#22d3ee', stroke: '#a3e635', pattern: 'bolt' },
+    { id: 'or',      name: 'Lumière',        rarity: 'legendaire', color: '#eab308', stroke: '#713f12', pattern: 'sunburst' },
+    { id: 'platine', name: 'Acier',   rarity: 'legendaire', color: '#cbd5e1', stroke: '#334155', pattern: 'circuit' },
+    { id: 'aura',    name: 'Chaos',      rarity: 'aura',       color: '#1e3a8a', stroke: '#f97316', pattern: 'aura' }
+  ];
+
+  const TRAINEES = [
+    { id: 'lea',   name: 'Boulette',    rarity: 'commun',     color: '#f97316', stroke: '#fff7ed', pattern: 'plain', band: 'dash' },
+    { id: 'max',   name: 'Pixel',    rarity: 'commun',     color: '#84cc16', stroke: '#1a2e05', pattern: 'dots', band: 'dots' },
+    { id: 'tom',   name: 'Bidule',    rarity: 'commun',     color: '#94a3b8', stroke: '#f1f5f9', pattern: 'stripes', band: 'wave' },
+    { id: 'ines',  name: 'Filou',   rarity: 'rare',       color: '#06b6d4', stroke: '#cffafe', pattern: 'ring', band: 'zigzag' },
+    { id: 'hugo',  name: 'Lutin',   rarity: 'rare',       color: '#e879f9', stroke: '#4a044e', pattern: 'split', band: 'stripes' },
+    { id: 'nora',  name: 'Nuage',   rarity: 'rare',       color: '#fde047', stroke: '#422006', pattern: 'glow', band: 'double' },
+    { id: 'lou',   name: 'Tornade',    rarity: 'epique',     color: '#8b5cf6', stroke: '#ede9fe', pattern: 'star', band: 'chevron' },
+    { id: 'sami',  name: 'Sirène',   rarity: 'epique',     color: '#10b981', stroke: '#ecfdf5', pattern: 'stripes', band: 'wave' },
+    { id: 'eva',   name: 'Gargouille',    rarity: 'epique',     color: '#f43f5e', stroke: '#fff1f2', pattern: 'ring', band: 'zigzag' },
+    { id: 'adam',  name: 'Dragonnet',   rarity: 'mythique',   color: '#7f1d1d', stroke: '#fca5a5', pattern: 'split', band: 'stripes' },
+    { id: 'jade',  name: 'Spectre',   rarity: 'mythique',   color: '#15803d', stroke: '#bbf7d0', pattern: 'glow', band: 'double' },
+    { id: 'theo',  name: 'Hydre',   rarity: 'mythique',   color: '#0284c7', stroke: '#e0f2fe', pattern: 'dots', band: 'dash' },
+    { id: 'lina',  name: 'Griffon',   rarity: 'legendaire', color: '#fbbf24', stroke: '#78350f', pattern: 'crown', band: 'chevron' },
+    { id: 'noah',  name: 'Licorne',   rarity: 'legendaire', color: '#e5e7eb', stroke: '#1f2937', pattern: 'crown', band: 'dots' },
+    { id: 'aurel', name: 'Mirage',  rarity: 'aura',       color: '#1e3a8a', stroke: '#facc15', pattern: 'aura', band: 'stripes' }
+  ];
+
+  // 30 jours : des pièces qui augmentent chaque jour, une boîte mystère tous les 7 jours
+  // (jours 7, 14, 21, 28), et deux boîtes au jour 30
+  const DAILY_DAYS = 30;
+  const REWARDS = Array.from({ length: DAILY_DAYS }, (_, i) => {
+    const day = i + 1;
+    return { coins: 50 + i * 5, boxes: day === DAILY_DAYS ? 2 : (day % 7 === 0 ? 1 : 0) };
+  });
+
+  const AURA_PALETTE = ['#1e3a8a', '#f97316', '#dc2626', '#facc15'];
+
+  // ---------- Utilitaires ----------
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const byId = (list, id) => list.find((x) => x.id === id);
+
+  function pickWeighted(items) {
+    const total = items.reduce((s, x) => s + x.weight, 0);
+    let r = Math.random() * total;
+    for (const x of items) {
+      r -= x.weight;
+      if (r < 0) return x;
+    }
+    return items[items.length - 1];
+  }
+  // Tire d'abord la rareté, puis un objet de cette rareté
+  function pickItem(list) {
+    const rarity = pickWeighted(RARITY_ORDER.map((k) => ({ key: k, weight: RARITIES[k].weight }))).key;
+    const pool = list.filter((x) => x.rarity === rarity);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  function oddsText() {
+    return RARITY_ORDER
+      .map((k) => `${RARITIES[k].label} ${String(RARITIES[k].weight).replace('.', ',')} %`)
+      .join(' · ');
+  }
+
+  // Couleur de l'aura : fondu continu entre bleu foncé, orange, rouge, jaune
+  function mixHex(a, b, t) {
+    const pa = [1, 3, 5].map((i) => parseInt(a.substr(i, 2), 16));
+    const pb = [1, 3, 5].map((i) => parseInt(b.substr(i, 2), 16));
+    return 'rgb(' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(',') + ')';
+  }
+  function auraColor(now) {
+    const t = (now / 1500) % AURA_PALETTE.length;
+    const i = Math.floor(t);
+    return mixHex(AURA_PALETTE[i], AURA_PALETTE[(i + 1) % AURA_PALETTE.length], t - i);
+  }
+
+  function dayKey(d) { return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
+  function todayKey() { return dayKey(new Date()); }
+  function yesterdayKey() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return dayKey(d);
+  }
+
+  // ---------- Sauvegarde (dans ce navigateur) ----------
+  const SAVE_KEY = 'io-proto-save';
+  function defaultSave() {
+    return { coins: 0, gems: 0, best: 0, xp: 0, skin: 'blue', skins: ['blue'], trainees: [], followers: [], upgrades: {}, audio: { sfx: 80, music: 50 }, pseudo: '', playerId: '', daily: { count: 0, last: null } };
+  }
+  function loadSave() {
+    let s = defaultSave();
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) s = Object.assign(defaultSave(), JSON.parse(raw));
+    } catch (e) {}
+    // On retire les identifiants qui n'existent plus dans le jeu
+    s.skins = s.skins.filter((id) => byId(SKINS, id));
+    if (!s.skins.includes(s.skin)) s.skin = 'blue';
+    s.trainees = s.trainees.filter((id) => byId(TRAINEES, id));
+    s.followers = s.followers.filter((id) => s.trainees.includes(id)).slice(0, MAX_FOLLOWERS);
+    s.xp = Number(s.xp) || 0;
+    s.gems = Number(s.gems) || 0;
+    s.upgrades = s.upgrades && typeof s.upgrades === 'object' ? s.upgrades : {};
+    const au = s.audio && typeof s.audio === 'object' ? s.audio : {};
+    s.audio = {
+      sfx: Number.isFinite(Number(au.sfx)) ? clamp(Number(au.sfx), 0, 100) : 80,
+      music: Number.isFinite(Number(au.music)) ? clamp(Number(au.music), 0, 100) : 50
+    };
+    s.pseudo = typeof s.pseudo === 'string' ? s.pseudo.slice(0, 16) : '';
+    if (typeof s.playerId !== 'string' || !s.playerId) s.playerId = newPlayerId();
+    return s;
+  }
+  let save = loadSave();
+  function persist() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {}
+  }
+
+  // ---------- Sons et musique ----------
+  // Tout est généré par le code (oscillateurs Web Audio) : aucun fichier audio tiers,
+  // donc rien à acheter ni à créditer pour publier le jeu.
+  const audio = { ctx: null, sfxBus: null, musicBus: null, next: 0, step: 0, timer: null };
+  const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  // Musique : 4 accords (en notes MIDI), chacun joué en arpège de 8 croches
+  const CHORDS = [
+    { root: 45, tones: [57, 60, 64, 69] }, // La mineur
+    { root: 41, tones: [53, 57, 60, 65] }, // Fa
+    { root: 48, tones: [52, 55, 60, 64] }, // Do
+    { root: 43, tones: [55, 59, 62, 67] }  // Sol
+  ];
+  const ARP = [0, 1, 2, 3, 2, 1, 2, 1];
+  const BEAT = 60 / 96 / 2; // une croche à 96 BPM
+
+  // Une note : oscillateur avec attaque et extinction douces (glissando possible)
+  function tone(bus, freq, t, dur, type, vol, freqEnd = null) {
+    const c = audio.ctx;
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.01, dur * 0.2));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g);
+    g.connect(bus);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  // Effets sonores
+  const SFX = {
+    ui:      (b, t) => tone(b, 1400, t, 0.04, 'square', 0.12),
+    tick:    (b, t) => tone(b, 660, t, 0.12, 'triangle', 0.5),
+    go:      (b, t) => { tone(b, 990, t, 0.25, 'triangle', 0.6); tone(b, 1480, t, 0.25, 'sine', 0.3); },
+    eat:     (b, t) => tone(b, 660, t, 0.09, 'sine', 0.35, 990),
+    bigeat:  (b, t) => tone(b, 260, t, 0.22, 'square', 0.22, 520),
+    shield:  (b, t) => { tone(b, 880, t, 0.5, 'sine', 0.4); tone(b, 1320, t + 0.05, 0.45, 'sine', 0.25); },
+    die:     (b, t) => tone(b, 420, t, 0.9, 'sawtooth', 0.3, 70),
+    upgrade: (b, t) => [523, 659, 784, 1047].forEach((f, i) => tone(b, f, t + i * 0.08, 0.2, 'triangle', 0.4)),
+    coin:    (b, t) => { tone(b, 1046, t, 0.12, 'square', 0.18); tone(b, 1568, t + 0.09, 0.22, 'square', 0.18); },
+    box:     (b, t) => [392, 523, 659].forEach((f, i) => tone(b, f, t + i * 0.07, 0.18, 'sine', 0.45))
+  };
+  function playSfx(name) {
+    if (!audio.ctx || audio.ctx.state !== 'running') return;
+    SFX[name](audio.sfxBus, audio.ctx.currentTime + 0.005);
+  }
+
+  // Musique : un planificateur écrit les notes une fraction de seconde à l'avance
+  function scheduleMusic() {
+    const c = audio.ctx;
+    if (!c) return;
+    if (audio.next < c.currentTime) audio.next = c.currentTime + 0.05; // après une pause (onglet caché)
+    while (audio.next < c.currentTime + 0.3) {
+      const ch = CHORDS[Math.floor(audio.step / 8) % CHORDS.length];
+      const i = audio.step % 8;
+      const t = audio.next;
+      tone(audio.musicBus, mtof(ch.tones[ARP[i]]), t, BEAT * 1.6, 'sine', 0.5);
+      if (i === 0 || i === 4) tone(audio.musicBus, mtof(ch.root), t, BEAT * 3.5, 'triangle', 0.9);
+      audio.next += BEAT;
+      audio.step += 1;
+    }
+  }
+  function startMusic() {
+    if (audio.timer) return;
+    audio.next = audio.ctx.currentTime + 0.1;
+    audio.step = 0;
+    audio.timer = setInterval(scheduleMusic, 80);
+  }
+
+  // Les navigateurs exigent un geste de l'utilisateur : on crée le son au premier clic ou toucher
+  function unlockAudio() {
+    if (!audio.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      try {
+        audio.ctx = new AC();
+        audio.sfxBus = audio.ctx.createGain();
+        audio.musicBus = audio.ctx.createGain();
+        audio.sfxBus.connect(audio.ctx.destination);
+        audio.musicBus.connect(audio.ctx.destination);
+        applyVolumes();
+        startMusic();
+      } catch (e) {
+        audio.ctx = null;
+        return;
+      }
+    }
+    if (audio.ctx.state === 'suspended') audio.ctx.resume();
+  }
+  document.addEventListener('pointerdown', unlockAudio);
+  document.addEventListener('keydown', unlockAudio);
+  // Chaque bouton fait un petit « clic »
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('button')) playSfx('ui');
+  });
+
+  // ----- Réglages : volumes des effets et de la musique (0 à 100 %) -----
+  function applyVolumes() {
+    if (!audio.ctx) return;
+    audio.sfxBus.gain.value = (save.audio.sfx / 100) * 0.5;
+    audio.musicBus.gain.value = (save.audio.music / 100) * 0.3;
+  }
+  function updateVolumeLabels() {
+    $('vol-sfx-val').textContent = `${save.audio.sfx} %`;
+    $('vol-music-val').textContent = `${save.audio.music} %`;
+  }
+  function syncSettings() {
+    $('vol-sfx').value = save.audio.sfx;
+    $('vol-music').value = save.audio.music;
+    updateVolumeLabels();
+  }
+  function setVolume(kind, value) {
+    save.audio[kind] = clamp(Number(value), 0, 100);
+    persist();
+    applyVolumes();
+    updateVolumeLabels();
+  }
+
+  // ---------- Classement mondial ----------
+  // Un classement mondial a besoin d'une base en ligne partagée par tous les joueurs.
+  // Ici : Supabase (gratuit). Remplis url et key après avoir créé le projet (voir classement_supabase.sql).
+  // Tant qu'ils sont vides, le classement reste éteint et rien n'est envoyé.
+  const RANK = { url: 'https://mtpaqoevhshjxkavhfwz.supabase.co', key: 'sb_publishable_lU3bywm6wEjrqIkM6-eM0w_dkJESHgs', table: 'players' };
+  const RANK_EVERY = 5000; // rafraîchissement en direct, en ms
+  let rankTimer = null;
+  let rankBusy = false;
+
+  // Identifiant anonyme du joueur (aucune donnée personnelle)
+  function newPlayerId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+  function rankEnabled() { return !!(RANK.url && RANK.key); }
+  function rankHeaders(extra) {
+    // Supabase accepte la clé dans l'en-tête apikey seul (clé « anon » ou « publishable »)
+    return Object.assign({ apikey: RANK.key, 'Content-Type': 'application/json' }, extra || {});
+  }
+  // Message d'erreur lisible : code HTTP et réponse du serveur
+  async function rankError(r) {
+    let body = '';
+    try { body = (await r.text()).slice(0, 200); } catch (e) {}
+    return `erreur ${r.status}` + (body ? ' : ' + body : '');
+  }
+  // Les 100 meilleurs joueurs, par niveau puis par XP
+  async function fetchRanking() {
+    // Clé passée dans l'URL : requête simple, sans en-têtes spéciaux (moins de blocages du navigateur)
+    const url = `${RANK.url}/rest/v1/${RANK.table}?select=id,pseudo,level,xp&order=level.desc,xp.desc&limit=100&apikey=${encodeURIComponent(RANK.key)}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(await rankError(r));
+    return r.json();
+  }
+  // Envoie ton niveau : crée ta ligne, ou la met à jour si elle existe déjà
+  async function pushScore() {
+    if (!rankEnabled() || !save.pseudo) return;
+    const body = { id: save.playerId, pseudo: save.pseudo, level: levelInfo().level, xp: save.xp, updated_at: new Date().toISOString() };
+    const r = await fetch(`${RANK.url}/rest/v1/${RANK.table}?on_conflict=id`, {
+      method: 'POST',
+      headers: rankHeaders({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(await rankError(r));
+  }
+
+  // Affichage : tout passe par textContent, car les pseudos viennent des joueurs
+  function renderRankList(rows) {
+    const ol = $('rank-list');
+    ol.innerHTML = '';
+    rows.forEach((r, i) => {
+      const li = document.createElement('li');
+      if (r.id === save.playerId) li.className = 'me';
+      const pos = document.createElement('span');
+      pos.className = 'pos';
+      pos.textContent = `${i + 1}.`;
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = r.pseudo;
+      const lv = document.createElement('span');
+      lv.className = 'lv';
+      lv.textContent = `Niv. ${r.level}`;
+      li.append(pos, name, lv);
+      ol.appendChild(li);
+    });
+  }
+  function updateRankMe() {
+    $('rank-me').textContent = save.pseudo
+      ? `${save.pseudo} · niveau ${levelInfo().level}`
+      : 'Choisis un pseudo pour apparaître dans le classement.';
+  }
+  async function refreshRanking() {
+    const status = $('rank-status');
+    if (!rankEnabled()) {
+      status.textContent = 'Classement mondial pas encore connecté.';
+      return;
+    }
+    if (rankBusy) return;
+    rankBusy = true;
+    try {
+      const rows = await fetchRanking();
+      renderRankList(rows);
+      status.innerHTML = '<span class="live-dot"></span> En direct · ' + new Date().toLocaleTimeString('fr-FR');
+    } catch (e) {
+      status.textContent = 'Erreur : ' + e.message;
+    } finally {
+      rankBusy = false;
+    }
+  }
+  function startRankTimer() {
+    stopRankTimer();
+    refreshRanking();
+    rankTimer = setInterval(refreshRanking, RANK_EVERY);
+  }
+  function stopRankTimer() {
+    if (rankTimer) clearInterval(rankTimer);
+    rankTimer = null;
+  }
+  // Pseudo : 3 à 16 caractères. Il devient définitif à l'enregistrement, après une confirmation.
+  let pseudoArmed = false;
+  function setPseudoArmed(on) {
+    pseudoArmed = on;
+    $('rank-save').textContent = on ? 'Confirmer : pseudo définitif' : 'Enregistrer mon pseudo';
+  }
+  // Affiche soit le formulaire (pas de pseudo), soit le classement (pseudo enregistré)
+  function updateRankPanel() {
+    const hasPseudo = !!save.pseudo;
+    $('rank-form').classList.toggle('hidden', hasPseudo);
+    $('rank-board').classList.toggle('hidden', !hasPseudo);
+    $('rank-pseudo').value = save.pseudo || '';
+    $('rank-pseudo').disabled = hasPseudo;
+    $('rank-msg').textContent = '';
+    setPseudoArmed(false);
+    updateRankMe();
+  }
+  function savePseudo() {
+    const msg = $('rank-msg');
+    const v = $('rank-pseudo').value.trim();
+    if (!/^[\p{L}\p{N} _-]{3,16}$/u.test(v)) {
+      msg.textContent = 'Pseudo : 3 à 16 caractères (lettres, chiffres, espaces, _ ou -).';
+      setPseudoArmed(false);
+      return;
+    }
+    // Première pression : on prévient. Deuxième pression : le pseudo est enregistré pour toujours.
+    if (!pseudoArmed) {
+      setPseudoArmed(true);
+      msg.textContent = `« ${v} » sera ton pseudo pour toujours. Appuie encore pour confirmer.`;
+      return;
+    }
+    save.pseudo = v;
+    persist();
+    updateRankPanel();
+    // D'abord on envoie le pseudo, puis on affiche le classement (pour que le joueur y figure déjà)
+    pushScore()
+      .then(startRankTimer)
+      .catch((e) => { $('rank-status').textContent = 'Envoi impossible : ' + e.message; });
+  }
+
+  // Niveau d'amélioration d'un skin ou d'une trainée (0 à 5)
+  function upLevel(id) {
+    return Math.min(UPGRADE_MAX, Number(save.upgrades[id]) || 0);
+  }
+  // Nombre de boucliers par partie selon le niveau d'un skin
+  function shieldsFor(lv) {
+    return lv >= 5 ? 2 : (lv >= 3 ? 1 : 0);
+  }
+
+  // Niveau du joueur, calculé à partir de l'XP (= score cumulé)
+  function levelInfo() {
+    return { level: Math.floor(save.xp / LEVEL_XP) + 1, into: save.xp % LEVEL_XP };
+  }
+
+  // Tire un objet ; un doublon est remboursé selon sa rareté
+  function grantItem(kind) {
+    const list = kind === 'skin' ? SKINS : TRAINEES;
+    const key = kind === 'skin' ? 'skins' : 'trainees';
+    const item = pickItem(list);
+    if (save[key].includes(item.id)) {
+      const refund = DUPE_REFUND[item.rarity];
+      save.coins += refund;
+      save.gems += DUPE_GEMS;
+      return { kind, item, dupe: true, refund };
+    }
+    save[key].push(item.id);
+    return { kind, item, dupe: false, refund: 0 };
+  }
+  function describe(res) {
+    const label = res.kind === 'skin' ? 'Skin' : 'Trainée';
+    const rar = RARITIES[res.item.rarity].label;
+    return res.dupe
+      ? `${label} ${res.item.name} (${rar}) en double : ${res.refund} pièces et ${DUPE_GEMS} gemmes remboursées.`
+      : `${label} ${res.item.name} (${rar}) !`;
+  }
+
+  // Boîte du jour 7 : 25 % skin, 25 % trainée, 50 % rien
+  function openDailyBox() {
+    const roll = Math.random();
+    if (roll < DAILY_BOX.skin) return grantItem('skin');
+    if (roll < DAILY_BOX.skin + DAILY_BOX.trainee) return grantItem('trainee');
+    return null;
+  }
+
+  // ---------- Récompenses quotidiennes ----------
+  function canClaim() {
+    return save.daily.last !== todayKey();
+  }
+  // Nombre de jours déjà récupérés dans la semaine en cours
+  function cycleCount() {
+    const last = save.daily.last;
+    if (last === todayKey()) return save.daily.count;
+    if (last === yesterdayKey() && save.daily.count < DAILY_DAYS) return save.daily.count;
+    return 0; // jour manqué : la semaine repart à zéro
+  }
+  function claimDaily() {
+    if (!canClaim()) return;
+    const idx = cycleCount();
+    const reward = REWARDS[idx];
+    save.coins += reward.coins;
+    let msg = `+${reward.coins} pièces`;
+    for (let k = 0; k < reward.boxes; k++) {
+      const res = openDailyBox();
+      msg += ' · ' + (res ? describe(res) : 'Boîte vide : rien cette fois.');
+    }
+    save.daily = { count: idx + 1, last: todayKey() };
+    playSfx('coin');
+    persist();
+    renderDaily();
+    $('daily-msg').textContent = msg;
+  }
+
+  // ---------- Panneaux ----------
+  const PANELS = ['menu', 'shop', 'skins', 'trainees', 'detail', 'settings', 'ranking', 'daily', 'levels', 'gameover'];
+  function show(name) {
+    for (const p of PANELS) $(p).classList.toggle('hidden', p !== name);
+    $('hud').classList.toggle('hidden', name !== 'play');
+    $('mini').classList.toggle('hidden', name !== 'play');
+    if (name !== 'play') $('countdown').classList.add('hidden');
+    // Fond flouté dès qu'on n'est pas en partie
+    document.body.classList.toggle('blur', name !== 'play');
+  }
+
+  // Maps : elles tournent automatiquement, une nouvelle map tous les 3 niveaux
+  const MAP_EVERY = 3;
+  const MAPS = [{ id: 'ocean', name: 'Océan', draw: paintOceanLogo }];
+  function mapForLevel(level) {
+    return MAPS[Math.floor((level - 1) / MAP_EVERY) % MAPS.length];
+  }
+
+  // Logo de la map Océan, dessiné dans une zone de 220 x 120
+  function paintOceanLogo(c, now) {
+    const g = c.createLinearGradient(0, 0, 0, 120);
+    g.addColorStop(0, '#0e7490');
+    g.addColorStop(1, '#082f49');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 220, 120);
+    // rayons de lumière
+    c.fillStyle = '#e0f2fe';
+    c.globalAlpha = 0.08;
+    for (let i = 0; i < 3; i++) {
+      const x0 = 30 + i * 70;
+      c.beginPath();
+      c.moveTo(x0, 0);
+      c.lineTo(x0 + 18, 0);
+      c.lineTo(x0 + 50, 120);
+      c.lineTo(x0 + 30, 120);
+      c.closePath();
+      c.fill();
+    }
+    c.globalAlpha = 1;
+    // vagues
+    c.strokeStyle = 'rgba(224, 242, 254, 0.35)';
+    c.lineWidth = 2;
+    for (const y of [22, 36]) {
+      c.beginPath();
+      for (let x = 0; x <= 220; x += 10) {
+        const py = y + Math.sin(x / 22 + now / 900 + y) * 3;
+        if (x === 0) c.moveTo(x, py); else c.lineTo(x, py);
+      }
+      c.stroke();
+    }
+    // récif
+    c.fillStyle = '#1e3a4a';
+    c.beginPath();
+    c.arc(172, 88, 22, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = 'rgba(34, 211, 238, 0.7)';
+    c.lineWidth = 2;
+    c.stroke();
+    // algues
+    c.strokeStyle = '#065f46';
+    c.lineWidth = 3;
+    c.lineCap = 'round';
+    for (const x of [26, 46]) {
+      c.beginPath();
+      for (let i = 0; i <= 4; i++) {
+        const px = x + Math.sin(now / 700 + x + i) * 4 * (i / 4);
+        const py = 120 - i * 14;
+        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.stroke();
+    }
+    // bulles qui montent
+    c.strokeStyle = 'rgba(224, 242, 254, 0.7)';
+    c.lineWidth = 1.5;
+    for (let i = 0; i < 5; i++) {
+      const by = 120 - ((now / 30 + i * 31) % 140);
+      c.beginPath();
+      c.arc(96 + i * 12, by, 2 + (i % 3), 0, Math.PI * 2);
+      c.stroke();
+    }
+  }
+
+  // Panneau Niveaux : map actuelle, liste des maps qui défile, prochaines maps à venir
+  function renderLevels() {
+    const level = levelInfo().level;
+    const cur = mapForLevel(level);
+    const next = (Math.floor((level - 1) / MAP_EVERY) + 1) * MAP_EVERY + 1;
+    $('lv-title').textContent = level;
+    $('lv-current').textContent = `Map actuelle : ${cur.name} · Changement au niveau ${next}`;
+    const list = $('map-list');
+    list.innerHTML = '';
+    const dpr = window.devicePixelRatio || 1;
+    for (const m of MAPS) {
+      const card = document.createElement('div');
+      card.className = 'map-card' + (m === cur ? ' current' : '');
+      const cv = document.createElement('canvas');
+      cv.className = 'map-logo';
+      cv.width = 220 * dpr;
+      cv.height = 120 * dpr;
+      cv._map = m;
+      const name = document.createElement('strong');
+      name.textContent = m.name;
+      const tag = document.createElement('small');
+      tag.textContent = m === cur ? 'En cours' : 'Dans la rotation';
+      card.append(cv, name, tag);
+      list.appendChild(card);
+    }
+    // Prochaines maps, à créer plus tard
+    for (let i = 0; i < 2; i++) {
+      const card = document.createElement('div');
+      card.className = 'map-card locked';
+      card.innerHTML = '<div class="map-unknown">???</div><strong>???</strong><small>Bientôt</small>';
+      list.appendChild(card);
+    }
+  }
+
+  function renderMenu() {
+    const info = levelInfo();
+    $('level-text').textContent = `Niveau ${info.level}`;
+    $('level-bar').style.width = `${(info.into / LEVEL_XP) * 100}%`;
+    $('level-xp').textContent = `${info.into} / ${LEVEL_XP} XP`;
+    $('menu-stats').innerHTML = `${save.coins} pièces · ${GEM} ${save.gems} · Meilleur score : ${save.best}`;
+    $('daily-badge').textContent = canClaim() ? '(à récupérer)' : '';
+  }
+
+  function renderShop() {
+    $('shop-coins').textContent = `Pièces : ${save.coins}`;
+    $('buy-skin').textContent = `${SHOP_PRICE.skin} pièces`;
+    $('buy-skin').disabled = save.coins < SHOP_PRICE.skin;
+    $('buy-trainee').textContent = `${SHOP_PRICE.trainee} pièces`;
+    $('buy-trainee').disabled = save.coins < SHOP_PRICE.trainee;
+    $('odds-skin').textContent = 'Chances : ' + oddsText();
+    $('odds-trainee').textContent = 'Chances : ' + oddsText();
+  }
+
+  function buyBox(kind) {
+    if (save.coins < SHOP_PRICE[kind]) return;
+    save.coins -= SHOP_PRICE[kind];
+    const res = grantItem(kind);
+    playSfx('box');
+    persist();
+    renderShop();
+    $('shop-msg').textContent = describe(res);
+  }
+
+  // Rectangle en portrait pour un skin ou une trainée : fond = couleur de sa rareté
+  function makeTile(item, owned, active, onClick, activeText, reveal, extra = '') {
+    const barred = reveal && !owned;
+    const showName = owned || reveal;
+    const rar = RARITIES[item.rarity];
+    const tile = document.createElement('div');
+    tile.className = `tile r-${item.rarity}` + (owned ? (onClick ? ' clickable' : '') : (barred ? ' barred' : ' locked')) + (active ? ' equipped' : '');
+    const base = active ? activeText : owned ? 'Possédé' : 'Non débloqué';
+    const status = owned && extra ? `${base} · ${extra}` : base;
+    tile.innerHTML = `<div class="look-slot"></div>
+      <div><strong>${showName ? item.name : '???'}</strong><br><small>${rar.label}</small></div>
+      <small>${status}</small>`;
+    // Vignette : le vrai rendu du skin ou de la trainée (même verrouillé, pour donner envie de le débloquer)
+    const cv = document.createElement('canvas');
+    cv.className = 'look';
+    cv.width = 72 * (window.devicePixelRatio || 1);
+    cv.height = cv.width;
+    cv._item = item;
+    tile.querySelector('.look-slot').replaceWith(cv);
+    if (owned && onClick) tile.onclick = onClick;
+    return tile;
+  }
+
+  // Redessine les vignettes visibles (l'aura change de couleur, donc on rafraîchit souvent)
+  function paintTiles() {
+    if (!document.querySelector('.panel:not(.hidden)')) return;
+    const now = performance.now();
+    for (const cv of document.querySelectorAll('canvas.map-logo')) {
+      const s = cv.width / 220;
+      const c2 = cv.getContext('2d');
+      c2.setTransform(s, 0, 0, s, 0, 0);
+      c2.clearRect(0, 0, 220, 120);
+      cv._map.draw(c2, now);
+    }
+    for (const cv of document.querySelectorAll('canvas.look')) {
+      const item = cv._item;
+      if (!item) continue;
+      const s = cv.width / 72;
+      const c2 = cv.getContext('2d');
+      c2.setTransform(s, 0, 0, s, 0, 0);
+      c2.clearRect(0, 0, 72, 72);
+      if (TRAINEES.includes(item)) {
+        // Aperçu d'une trainée : le skin équipé (rond) avec la bande qui le suit
+        const sk = byId(SKINS, save.skin) || SKINS[0];
+        const bandColor = sk.pattern === 'aura' ? auraColor(now) : sk.color;
+        // Tracé de l'aperçu : points intermédiaires pour que les motifs se voient
+        const ctrl = [{ x: 46, y: 24 }, { x: 40, y: 34 }, { x: 30, y: 46 }, { x: 18, y: 58 }, { x: 8, y: 68 }];
+        const path = [];
+        for (let k = 0; k < ctrl.length - 1; k++) {
+          for (let t = 0; t < 4; t++) {
+            const u = t / 4;
+            path.push({ x: ctrl[k].x + (ctrl[k + 1].x - ctrl[k].x) * u, y: ctrl[k].y + (ctrl[k + 1].y - ctrl[k].y) * u });
+          }
+        }
+        path.push(ctrl[ctrl.length - 1]);
+        paintBand(c2, path, bandColor, 9, item.color, item.band);
+        paintBandFx(c2, path, 9, item.color, item.rarity, now);
+        paintLook(46, 24, 10, sk, now, c2, 0.35);
+      } else {
+        paintLook(36, 36, 20, item, now, c2, 0.35);
+      }
+    }
+  }
+  setInterval(paintTiles, 120);
+
+  // Libellé du niveau affiché sur la vignette (rien au niveau 0)
+  function lvText(id) {
+    const lv = upLevel(id);
+    return lv > 0 ? `Niv. ${lv}` : '';
+  }
+
+  // Taper un skin ou une trainée possédés ouvre sa fiche (équiper / suivre, améliorer)
+  function renderSkins() {
+    const list = $('skins-list');
+    list.innerHTML = '';
+    for (const s of SKINS) {
+      const owned = save.skins.includes(s.id);
+      list.appendChild(makeTile(s, owned, save.skin === s.id, () => openDetail('skin', s), 'Équipé', true, lvText(s.id)));
+    }
+  }
+
+  function renderTrainees() {
+    const list = $('trainees-list');
+    list.innerHTML = '';
+    $('trainees-count').textContent = `Trainées actives : ${save.followers.length} / ${MAX_FOLLOWERS}`;
+    for (const t of TRAINEES) {
+      const owned = save.trainees.includes(t.id);
+      list.appendChild(makeTile(t, owned, save.followers.includes(t.id), () => openDetail('trainee', t), 'Te suit', true, lvText(t.id)));
+    }
+  }
+
+  // ----- Fiche d'un skin ou d'une trainée -----
+  let detailKind = 'skin';
+  let detailItem = null;
+  function skinEffect(lv) {
+    return `Aimant ${lv * MAGNET_PER_LEVEL} px · Croissance +${Math.round(lv * GROWTH_PER_LEVEL * 100)} % · Bouclier ${shieldsFor(lv)}`;
+  }
+  function traineeEffect(lv) {
+    return `+${lv * TRAINEE_BONUS} pièces par partie si équipée`;
+  }
+  function openDetail(kind, item) {
+    detailKind = kind;
+    detailItem = item;
+    $('detail-msg').textContent = '';
+    renderDetail();
+    show('detail');
+  }
+  function renderDetail() {
+    const item = detailItem;
+    const kind = detailKind;
+    const lv = upLevel(item.id);
+    $('detail-look')._item = item;
+    $('detail-gems').innerHTML = `Gemmes : ${GEM} ${save.gems}`;
+    $('detail-name').textContent = item.name;
+    $('detail-rarity').textContent = RARITIES[item.rarity].label;
+    $('detail-level').textContent = `Niveau ${lv} / ${UPGRADE_MAX}  ${'●'.repeat(lv)}${'○'.repeat(UPGRADE_MAX - lv)}`;
+    $('detail-effect').textContent = kind === 'skin' ? skinEffect(lv) : traineeEffect(lv);
+    const eq = $('detail-equip');
+    if (kind === 'skin') {
+      const equipped = save.skin === item.id;
+      eq.textContent = equipped ? 'Équipé' : 'Équiper';
+      eq.disabled = equipped;
+    } else {
+      const follows = save.followers.includes(item.id);
+      eq.textContent = follows ? 'Ne plus suivre' : 'Suivre';
+      eq.disabled = false;
+    }
+    const up = $('detail-up');
+    if (lv >= UPGRADE_MAX) {
+      up.textContent = 'Niveau max';
+      up.disabled = true;
+    } else {
+      const cost = UPGRADE_COST[lv];
+      up.innerHTML = `Améliorer · ${cost} ${GEM}`;
+      up.disabled = save.gems < cost;
+    }
+  }
+  function detailEquip() {
+    const item = detailItem;
+    if (detailKind === 'skin') {
+      save.skin = item.id;
+      persist();
+      $('detail-msg').textContent = `${item.name} est équipé.`;
+    } else {
+      toggleFollower(item.id);
+    }
+    renderDetail();
+  }
+  function detailUpgrade() {
+    const item = detailItem;
+    const lv = upLevel(item.id);
+    if (lv >= UPGRADE_MAX) return;
+    const cost = UPGRADE_COST[lv];
+    if (save.gems < cost) {
+      $('detail-msg').textContent = `Il te faut ${cost} gemmes pour cette amélioration.`;
+      return;
+    }
+    save.gems -= cost;
+    save.upgrades[item.id] = lv + 1;
+    persist();
+    playSfx('upgrade');
+    $('detail-msg').textContent = `${item.name} passe au niveau ${lv + 1}.`;
+    renderDetail();
+  }
+  function toggleFollower(id) {
+    const msg = $('detail-msg');
+    if (save.followers.includes(id)) {
+      save.followers = save.followers.filter((x) => x !== id);
+    } else if (save.followers.length >= MAX_FOLLOWERS) {
+      msg.textContent = `Maximum ${MAX_FOLLOWERS} trainées. Retire-en une d'abord.`;
+      return;
+    } else {
+      save.followers.push(id);
+    }
+    persist();
+    msg.textContent = 'Effectif à la prochaine partie.';
+  }
+  function backFromDetail() {
+    if (detailKind === 'skin') {
+      renderSkins();
+      show('skins');
+    } else {
+      renderTrainees();
+      show('trainees');
+    }
+  }
+
+  function renderDaily() {
+    const grid = $('daily-grid');
+    grid.innerHTML = '';
+    const done = cycleCount();
+    const claimable = canClaim();
+    REWARDS.forEach((r, i) => {
+      const cls = i < done ? 'done' : (claimable && i === done ? 'avail' : '');
+      const div = document.createElement('div');
+      div.className = 'day ' + cls;
+      const boxTxt = r.boxes > 1 ? ` + ${r.boxes} boîtes` : (r.boxes === 1 ? ' + boîte' : '');
+      div.innerHTML = `<strong>Jour ${i + 1}</strong><br><small>${r.coins} pièces${boxTxt}</small>${i < done ? '<br><small>Reçu</small>' : ''}`;
+      grid.appendChild(div);
+    });
+    const btn = $('btn-claim');
+    btn.disabled = !claimable;
+    btn.textContent = claimable ? 'Récupérer la récompense' : "Déjà récupérée aujourd'hui";
+    $('daily-week-msg').textContent = (!claimable && done === DAILY_DAYS)
+      ? 'Mois complet ! Reviens demain pour le suivant.' : '';
+  }
+
+  // ---------- Compte à rebours ----------
+  let countdownTimers = [];
+  function runCountdown() {
+    const el = $('countdown');
+    const steps = ['3', '2', '1', 'GO !'];
+    el.classList.remove('hidden');
+    steps.forEach((text, i) => {
+      countdownTimers.push(setTimeout(() => {
+        el.textContent = text;
+        playSfx(i === steps.length - 1 ? 'go' : 'tick');
+        el.classList.remove('pop');
+        void el.offsetWidth; // relance l'animation
+        el.classList.add('pop');
+      }, i * 700));
+    });
+    countdownTimers.push(setTimeout(() => {
+      el.classList.add('hidden');
+      if (state === 'countdown') state = 'play';
+      countdownTimers = [];
+    }, steps.length * 700));
+  }
+  function clearCountdown() {
+    countdownTimers.forEach(clearTimeout);
+    countdownTimers = [];
+    $('countdown').classList.add('hidden');
+  }
+
+  // ---------- Jeu ----------
+  const canvas = $('game');
+  const ctx = canvas.getContext('2d');
+  let W = 0, H = 0;
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Mini-carte : même logique de résolution que le jeu
+  const mini = $('mini');
+  const mctx = mini.getContext('2d');
+  const miniDpr = window.devicePixelRatio || 1;
+  mini.width = MINI * miniDpr;
+  mini.height = MINI * miniDpr;
+  mctx.setTransform(miniDpr, 0, 0, miniDpr, 0, 0);
+
+  // Position du pointeur (souris ou doigt), en coordonnées écran
+  const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  canvas.addEventListener('pointermove', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; });
+  canvas.addEventListener('pointerdown', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; });
+
+  let player, foods, enemies, followers;
+  let rocks = [], currents = [], seaweed = [], bubbles = [];
+  let magnet = 0, growthMul = 1, shields = 0; // bonus du skin équipé pendant la partie
+  let state = 'menu';
+  let score = 0;
+
+  // Vrai si le point n'est pas dans un récif (avec une marge)
+  function freeOfRocks(x, y, pad) {
+    return !rocks.some((rk) => Math.hypot(x - rk.x, y - rk.y) < rk.r + pad);
+  }
+
+  function newFood() {
+    let x, y;
+    do {
+      x = rand(0, WORLD);
+      y = rand(0, WORLD);
+    } while (!freeOfRocks(x, y, 10));
+    return { x, y, r: 5, color: `hsl(${rand(0, 360)}, 80%, 60%)` };
+  }
+
+  // Un ennemi apparaît loin du joueur, avec une taille proche de la sienne
+  function spawnEnemy(e) {
+    do {
+      e.x = rand(0, WORLD);
+      e.y = rand(0, WORLD);
+    } while (dist(e, player) < 400 || !freeOfRocks(e.x, e.y, 30));
+    e.r = rand(Math.max(8, player.r * 0.5), player.r * 1.8 + 10);
+    e.vx = rand(-1, 1);
+    e.vy = rand(-1, 1);
+    return e;
+  }
+
+  // Carte : récifs, courants et décor, tirés au sort à chaque partie
+  function buildMap() {
+    const cx = WORLD / 2, cy = WORLD / 2;
+    rocks = [];
+    for (let guard = 0; rocks.length < ROCK_COUNT && guard < 3000; guard++) {
+      const r = rand(40, 90);
+      const x = rand(r, WORLD - r), y = rand(r, WORLD - r);
+      if (Math.hypot(x - cx, y - cy) < 380 + r) continue;
+      if (!freeOfRocks(x, y, r + 40)) continue;
+      rocks.push({ x, y, r });
+    }
+    currents = [];
+    for (let guard = 0; currents.length < CURRENT_COUNT && guard < 3000; guard++) {
+      const rx = rand(220, 320), ry = rand(160, 240);
+      const x = rand(rx, WORLD - rx), y = rand(ry, WORLD - ry);
+      if (Math.hypot(x - cx, y - cy) < 500) continue;
+      const a = rand(0, Math.PI * 2);
+      currents.push({ x, y, rx, ry, dx: Math.cos(a), dy: Math.sin(a) });
+    }
+    seaweed = Array.from({ length: SEAWEED_COUNT }, () => ({
+      x: rand(0, WORLD), y: rand(0, WORLD), h: rand(50, 110), phase: rand(0, 6)
+    }));
+    bubbles = Array.from({ length: BUBBLE_COUNT }, () => ({
+      x: rand(0, WORLD), y: rand(0, WORLD), r: rand(2, 6), speed: rand(20, 60), phase: rand(0, 6)
+    }));
+  }
+
+  function restart() {
+    player = { x: WORLD / 2, y: WORLD / 2, r: 15, eaten: 0 };
+    // Bonus du skin équipé, selon son niveau d'amélioration
+    const skLv = upLevel(save.skin);
+    magnet = skLv * MAGNET_PER_LEVEL;
+    growthMul = 1 + skLv * GROWTH_PER_LEVEL;
+    shields = shieldsFor(skLv);
+    buildMap();
+    foods = Array.from({ length: FOOD_COUNT }, newFood);
+    enemies = Array.from({ length: ENEMY_COUNT }, () => spawnEnemy({}));
+    // Les trainées équipées apparaissent derrière le joueur
+    followers = save.followers.map((id, i) => ({
+      x: player.x - (i + 1) * FOLLOW_GAP,
+      y: player.y,
+      item: byId(TRAINEES, id)
+    }));
+    score = 0;
+  }
+
+  // Lancement : compte à rebours puis la partie
+  function startRun() {
+    clearCountdown();
+    restart();
+    state = 'countdown';
+    show('play');
+    runCountdown();
+  }
+
+  // Ajoute les pièces, les gemmes, l'XP et met à jour le meilleur score
+  function endRun() {
+    const gems = Math.floor(score / GEM_EVERY);
+    // Chaque trainée équipée rapporte des pièces en plus, selon son niveau
+    let bonus = 0;
+    for (const id of save.followers) bonus += upLevel(id) * TRAINEE_BONUS;
+    const earned = Math.floor(score / 2) + bonus;
+    save.coins += earned;
+    save.gems += gems;
+    save.xp += score;
+    save.best = Math.max(save.best, score);
+    persist();
+    if (save.pseudo) pushScore().catch(() => {});
+    return { earned, gems, bonus };
+  }
+
+  function die() {
+    state = 'over';
+    playSfx('die');
+    const res = endRun();
+    $('go-score').textContent = `Score : ${score}`;
+    const bonusText = res.bonus > 0 ? ` (dont ${res.bonus} grâce aux trainées)` : '';
+    $('go-earned').innerHTML = `+${res.earned} pièces${bonusText} · +${res.gems} ${GEM}`;
+    show('gameover');
+  }
+
+  function quitRun() {
+    clearCountdown();
+    state = 'menu';
+    endRun();
+    renderMenu();
+    show('menu');
+  }
+
+  // Dans le menu, la caméra dérive lentement sur la map pour le fond flouté
+  function idleCamera(now) {
+    player.x = WORLD / 2 + Math.cos(now / 6000) * 800;
+    player.y = WORLD / 2 + Math.sin(now / 7000) * 600;
+  }
+
+  // Une trainée se rapproche de la cible seulement si elle est trop loin
+  function followTarget(f, target, dt) {
+    const dx = target.x - f.x;
+    const dy = target.y - f.y;
+    const d = Math.hypot(dx, dy);
+    if (d > FOLLOW_GAP) {
+      const k = (d - FOLLOW_GAP) / d * Math.min(1, dt * 12);
+      f.x += dx * k;
+      f.y += dy * k;
+    }
+  }
+
+  function update(dt) {
+    // Le joueur avance vers le pointeur à vitesse constante
+    const dx = pointer.x - W / 2;
+    const dy = pointer.y - H / 2;
+    const d = Math.hypot(dx, dy);
+    if (d > 4) {
+      const step = Math.min(d, PLAYER_SPEED * dt);
+      player.x = clamp(player.x + (dx / d) * step, 0, WORLD);
+      player.y = clamp(player.y + (dy / d) * step, 0, WORLD);
+    }
+
+    // Courants : un courant pousse le joueur dans son sens
+    for (const z of currents) {
+      const ex = (player.x - z.x) / z.rx, ey = (player.y - z.y) / z.ry;
+      if (ex * ex + ey * ey < 1) {
+        player.x += z.dx * CURRENT_PUSH * dt;
+        player.y += z.dy * CURRENT_PUSH * dt;
+      }
+    }
+    // Récifs : on ne les traverse pas
+    for (const rk of rocks) {
+      const d = Math.hypot(player.x - rk.x, player.y - rk.y);
+      const min = rk.r + player.r;
+      if (d < min && d > 0) {
+        player.x = rk.x + (player.x - rk.x) / d * min;
+        player.y = rk.y + (player.y - rk.y) / d * min;
+      }
+    }
+    player.x = clamp(player.x, 0, WORLD);
+    player.y = clamp(player.y, 0, WORLD);
+
+    // Aimant (skin amélioré) : la nourriture proche glisse vers toi
+    if (magnet > 0) {
+      for (const f of foods) {
+        const d = dist(player, f);
+        if (d > 0 && d < player.r + magnet) {
+          const k = Math.min(1, dt * 6);
+          f.x += (player.x - f.x) * k;
+          f.y += (player.y - f.y) * k;
+        }
+      }
+    }
+
+    // Nourriture : toutes les 5 graines, on grossit
+    for (let i = 0; i < foods.length; i++) {
+      const f = foods[i];
+      if (dist(player, f) < player.r) {
+        player.eaten += 1;
+        if (player.eaten % FOOD_PER_GROWTH === 0) player.r += FOOD_GROWTH * growthMul;
+        score += 1;
+        foods[i] = newFood();
+        playSfx('eat');
+      }
+    }
+
+    // Ennemis
+    for (const e of enemies) {
+      const toPlayer = dist(e, player);
+      if (e.r > player.r && toPlayer < 350) {
+        // Un ennemi plus gros que toi te poursuit
+        const ang = Math.atan2(player.y - e.y, player.x - e.x);
+        e.x += Math.cos(ang) * CHASE_SPEED * dt;
+        e.y += Math.sin(ang) * CHASE_SPEED * dt;
+      } else {
+        // Sinon il erre au hasard
+        e.x += e.vx * 35 * dt;
+        e.y += e.vy * 35 * dt;
+        if (Math.random() < 0.01) { e.vx = rand(-1, 1); e.vy = rand(-1, 1); }
+      }
+      if (e.x < 0 || e.x > WORLD) e.vx = -e.vx;
+      if (e.y < 0 || e.y > WORLD) e.vy = -e.vy;
+      e.x = clamp(e.x, 0, WORLD);
+      e.y = clamp(e.y, 0, WORLD);
+      // Les ennemis contournent eux aussi les récifs
+      for (const rk of rocks) {
+        const d = Math.hypot(e.x - rk.x, e.y - rk.y);
+        const min = rk.r + e.r;
+        if (d < min && d > 0) {
+          e.x = rk.x + (e.x - rk.x) / d * min;
+          e.y = rk.y + (e.y - rk.y) / d * min;
+        }
+      }
+
+      if (dist(e, player) < (player.r + e.r) * 0.6) {
+        if (player.r > e.r * 1.1) {
+          // Tu manges l'ennemi plus petit : gain modeste
+          player.r += e.r * ENEMY_GROWTH;
+          playSfx('bigeat');
+          score += 10;
+          spawnEnemy(e);
+        } else if (e.r > player.r * 1.1) {
+          if (shields > 0) {
+            // Bouclier (skin amélioré) : tu es protégé, l'ennemi est renvoyé plus loin
+            shields -= 1;
+            playSfx('shield');
+            spawnEnemy(e);
+            continue;
+          }
+          // Un ennemi plus gros t'attrape
+          die();
+          return;
+        }
+      }
+    }
+
+    // Trainées : chacune suit celle qui la précède
+    let leader = player;
+    for (const f of followers) {
+      followTarget(f, leader, dt);
+      leader = f;
+    }
+  }
+
+  // Bande d'une trainée : suit une liste de points (en coordonnées écran, de la tête vers la queue)
+  // Bord gauche épais, bord droit fin, remplissage translucide qui s'efface vers la queue
+  function paintBand(c, pts, color, w, accent = color, motif = null) {
+    const n = pts.length;
+    if (n < 2) return;
+    const head = pts[0], tail = pts[n - 1];
+    if (Math.hypot(tail.x - head.x, tail.y - head.y) < 1) return;
+    const L = [], R = [];
+    for (let j = 0; j < n; j++) {
+      const a = pts[Math.max(0, j - 1)], b = pts[Math.min(n - 1, j + 1)];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const nx = -dy / d * w / 2, ny = dx / d * w / 2;
+      L.push({ x: pts[j].x + nx, y: pts[j].y + ny });
+      R.push({ x: pts[j].x - nx, y: pts[j].y - ny });
+    }
+    const g = c.createLinearGradient(head.x, head.y, tail.x, tail.y);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    const gA = c.createLinearGradient(head.x, head.y, tail.x, tail.y);
+    gA.addColorStop(0, accent);
+    gA.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    c.save();
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.shadowColor = color;
+    c.shadowBlur = 8;
+    // remplissage translucide
+    c.globalAlpha = 0.3;
+    c.fillStyle = g;
+    c.beginPath();
+    c.moveTo(L[0].x, L[0].y);
+    for (let j = 1; j < n; j++) c.lineTo(L[j].x, L[j].y);
+    for (let j = n - 1; j >= 0; j--) c.lineTo(R[j].x, R[j].y);
+    c.closePath();
+    c.fill();
+    // bords lumineux : gauche épais, droit fin
+    c.globalAlpha = 1;
+    c.strokeStyle = g;
+    c.lineWidth = Math.max(1.5, w * 0.3);
+    c.beginPath();
+    c.moveTo(L[0].x, L[0].y);
+    for (let j = 1; j < n; j++) c.lineTo(L[j].x, L[j].y);
+    c.stroke();
+    c.strokeStyle = gA;
+    c.lineWidth = Math.max(1, w * 0.14);
+    c.beginPath();
+    c.moveTo(R[0].x, R[0].y);
+    for (let j = 1; j < n; j++) c.lineTo(R[j].x, R[j].y);
+    c.stroke();
+    if (motif) paintMotif(c, pts, w, accent, motif);
+    c.restore();
+  }
+
+  // Motif dessiné sur la bande, dans la couleur de la trainée
+  function paintMotif(c, pts, w, accent, motif) {
+    const n = pts.length;
+    const normal = (j) => {
+      const a = pts[Math.max(0, j - 1)], b = pts[Math.min(n - 1, j + 1)];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy) || 1;
+      return { x: -dy / d, y: dx / d };
+    };
+    c.save();
+    c.strokeStyle = accent;
+    c.fillStyle = accent;
+    c.lineWidth = Math.max(1, w * 0.12);
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.globalAlpha = 0.9;
+    if (motif === 'dash') {
+      // pointillés le long de la bande
+      c.setLineDash([w * 0.35, w * 0.25]);
+      c.beginPath();
+      c.moveTo(pts[0].x, pts[0].y);
+      for (let j = 1; j < n; j++) c.lineTo(pts[j].x, pts[j].y);
+      c.stroke();
+    } else if (motif === 'zigzag' || motif === 'wave') {
+      // zigzag net ou ondulation douce
+      c.beginPath();
+      for (let j = 0; j < n; j++) {
+        const nn = normal(j);
+        const s = motif === 'zigzag' ? (Math.floor(j / 2) % 2 ? 1 : -1) : Math.sin(j * 0.6);
+        const px = pts[j].x + nn.x * w * 0.25 * s, py = pts[j].y + nn.y * w * 0.25 * s;
+        if (j === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.stroke();
+    } else if (motif === 'dots') {
+      // points espacés
+      for (let j = 0; j < n; j += 3) {
+        c.beginPath();
+        c.arc(pts[j].x, pts[j].y, Math.max(1, w * 0.08), 0, Math.PI * 2);
+        c.fill();
+      }
+    } else if (motif === 'stripes') {
+      // rayures transversales
+      for (let j = 2; j < n; j += 4) {
+        const nn = normal(j);
+        c.beginPath();
+        c.moveTo(pts[j].x + nn.x * w * 0.45, pts[j].y + nn.y * w * 0.45);
+        c.lineTo(pts[j].x - nn.x * w * 0.45, pts[j].y - nn.y * w * 0.45);
+        c.stroke();
+      }
+    } else if (motif === 'double') {
+      // deux filets fins au centre
+      for (const side of [-0.18, 0.18]) {
+        c.beginPath();
+        for (let j = 0; j < n; j++) {
+          const nn = normal(j);
+          const px = pts[j].x + nn.x * w * side, py = pts[j].y + nn.y * w * side;
+          if (j === 0) c.moveTo(px, py); else c.lineTo(px, py);
+        }
+        c.stroke();
+      }
+    } else if (motif === 'chevron') {
+      // chevrons qui pointent vers la tête
+      for (let j = 3; j < n; j += 5) {
+        const nn = normal(j);
+        c.beginPath();
+        c.moveTo(pts[j].x + nn.x * w * 0.4, pts[j].y + nn.y * w * 0.4);
+        c.lineTo(pts[j].x, pts[j].y);
+        c.lineTo(pts[j].x - nn.x * w * 0.4, pts[j].y - nn.y * w * 0.4);
+        c.stroke();
+      }
+    }
+    c.restore();
+  }
+
+  // Effets de bande selon la rareté : plus la trainée est rare, plus la bande est travaillée
+  const FX_TIER = { commun: 0, rare: 1, epique: 2, mythique: 3, legendaire: 4, aura: 5 };
+  function paintBandFx(c, pts, w, accent, rarity, now) {
+    const tier = FX_TIER[rarity] || 0;
+    const n = pts.length;
+    if (tier === 0 || n < 3) return;
+    const normal = (j) => {
+      const a = pts[Math.max(0, j - 1)], b = pts[Math.min(n - 1, j + 1)];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy) || 1;
+      return { x: -dy / d, y: dx / d };
+    };
+    c.save();
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    // Rare et plus : liseré extérieur fin de chaque côté
+    if (tier >= 1) {
+      c.strokeStyle = accent;
+      c.globalAlpha = tier >= 4 ? 0.7 : 0.45;
+      c.lineWidth = Math.max(0.8, w * 0.07);
+      c.shadowColor = accent;
+      c.shadowBlur = 6;
+      for (const side of [-0.65, 0.65]) {
+        c.beginPath();
+        for (let j = 0; j < n; j++) {
+          const nn = normal(j);
+          const px = pts[j].x + nn.x * w * side, py = pts[j].y + nn.y * w * side;
+          if (j === 0) c.moveTo(px, py); else c.lineTo(px, py);
+        }
+        c.stroke();
+      }
+    }
+    // Épique et plus : étincelles qui scintillent au bord de la bande
+    if (tier >= 2) {
+      c.fillStyle = accent;
+      c.shadowColor = accent;
+      c.shadowBlur = 6;
+      for (let j = 1; j < n; j += 4) {
+        const nn = normal(j);
+        const off = Math.sin(now / 180 + j * 1.7) * w * 0.7;
+        c.globalAlpha = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(now / 120 + j * 2.3));
+        c.beginPath();
+        c.arc(pts[j].x + nn.x * off, pts[j].y + nn.y * off, Math.max(0.8, w * 0.07), 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+    // Mythique et plus : reflet lumineux qui glisse le long de la bande
+    if (tier >= 3) {
+      const shimmer = tier >= 5 ? auraColor(now) : '#ffffff';
+      const speed = tier >= 5 ? 1400 : 1900;
+      const shimmerAt = (phase) => {
+        const idx = Math.floor(((now / speed + phase) % 1) * (n - 1));
+        const span = Math.max(3, Math.floor(n * 0.18));
+        return [Math.max(0, idx - span), Math.min(n - 1, idx + span)];
+      };
+      const runs = tier >= 4 ? [0, 0.5] : [0];
+      for (const phase of runs) {
+        const [a0, a1] = shimmerAt(phase);
+        c.globalAlpha = 0.9;
+        c.strokeStyle = shimmer;
+        c.lineWidth = Math.max(1.5, w * 0.22);
+        c.shadowColor = accent;
+        c.shadowBlur = 10;
+        c.beginPath();
+        for (let j = a0; j <= a1; j++) {
+          if (j === a0) c.moveTo(pts[j].x, pts[j].y); else c.lineTo(pts[j].x, pts[j].y);
+        }
+        c.stroke();
+      }
+    }
+    c.restore();
+  }
+
+  // Halo néon selon la rareté : plus la rareté est haute, plus ça brille
+  const GLOW = { commun: 12, rare: 18, epique: 24, mythique: 30, legendaire: 36, aura: 42 };
+
+  // Dessine un personnage (skin ou trainée) avec sa couleur, son motif et son halo néon
+  function paintLook(x, y, r, item, now, c = ctx, halo = 1) {
+    const pattern = item.pattern;
+    const glow = (GLOW[item.rarity] || 6) * halo;
+    const neon = pattern === 'aura' ? auraColor(now) : item.color;
+
+    // Halo lumineux, dessiné hors du cercle
+    c.save();
+    c.shadowColor = neon;
+    c.shadowBlur = glow;
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI * 2);
+    c.fillStyle = neon;
+    c.fill();
+    c.restore();
+
+    c.save();
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI * 2);
+    if (pattern === 'aura') {
+      c.fillStyle = auraColor(now);
+    } else if (pattern === 'glow' || pattern === 'flame') {
+      const g = c.createRadialGradient(x, y, r * 0.1, x, y, r);
+      g.addColorStop(0, item.stroke);
+      g.addColorStop(1, item.color);
+      c.fillStyle = g;
+    } else if (pattern === 'cracks') {
+      // cœur clair qui s'assombrit vers le bord
+      const g = c.createRadialGradient(x, y, r * 0.1, x, y, r);
+      g.addColorStop(0, item.color);
+      g.addColorStop(1, item.stroke);
+      c.fillStyle = g;
+    } else {
+      c.fillStyle = item.color;
+    }
+    c.fill();
+    c.clip();
+
+    c.strokeStyle = item.stroke;
+    c.fillStyle = item.stroke;
+    c.shadowColor = item.stroke;
+    c.shadowBlur = glow * 0.5;
+    if (pattern === 'stripes') {
+      c.lineWidth = r * 0.22;
+      for (const k of [-1, -0.5, 0, 0.5, 1]) {
+        c.beginPath();
+        c.moveTo(x + k * r - r, y - r);
+        c.lineTo(x + k * r + r, y + r);
+        c.stroke();
+      }
+    } else if (pattern === 'dots') {
+      for (const [dx, dy] of [[-0.4, -0.3], [0.4, -0.3], [0, 0.1], [-0.4, 0.5], [0.4, 0.5], [0, -0.6]]) {
+        c.beginPath();
+        c.arc(x + dx * r, y + dy * r, r * 0.12, 0, Math.PI * 2);
+        c.fill();
+      }
+    } else if (pattern === 'ring') {
+      c.lineWidth = r * 0.22;
+      c.beginPath();
+      c.arc(x, y, r * 0.6, 0, Math.PI * 2);
+      c.stroke();
+    } else if (pattern === 'split') {
+      c.beginPath();
+      c.arc(x, y, r, -Math.PI / 2, Math.PI / 2);
+      c.closePath();
+      c.fill();
+    } else if (pattern === 'star') {
+      c.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + i * Math.PI / 5;
+        const rr = i % 2 ? r * 0.25 : r * 0.6;
+        c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      }
+      c.closePath();
+      c.fill();
+    } else if (pattern === 'cracks') {
+      // fissures qui rayonnent depuis le cœur
+      c.lineWidth = r * 0.06;
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + 0.3;
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x + Math.cos(a + 0.15) * r * 0.45, y + Math.sin(a + 0.15) * r * 0.45);
+        c.lineTo(x + Math.cos(a - 0.1) * r * 0.8, y + Math.sin(a - 0.1) * r * 0.8);
+        c.lineTo(x + Math.cos(a) * r * 1.1, y + Math.sin(a) * r * 1.1);
+        c.stroke();
+      }
+    } else if (pattern === 'eclipse') {
+      // arc lumineux qui contourne un noyau sombre
+      c.lineWidth = r * 0.14;
+      c.beginPath();
+      c.arc(x, y, r * 0.68, Math.PI * 1.05, Math.PI * 1.95);
+      c.stroke();
+      c.beginPath();
+      c.arc(x, y, r * 0.3, 0, Math.PI * 2);
+      c.fill();
+    } else if (pattern === 'swirl') {
+      // deux bras de spirale
+      c.lineWidth = r * 0.1;
+      for (const off of [0, Math.PI]) {
+        c.beginPath();
+        for (let i = 0; i <= 50; i++) {
+          const t = i / 50;
+          const a = t * Math.PI * 2.5 + off;
+          const rr = r * 0.9 * t;
+          const px = x + Math.cos(a) * rr;
+          const py = y + Math.sin(a) * rr;
+          if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+        }
+        c.stroke();
+      }
+    } else if (pattern === 'leaves') {
+      // quatre feuilles autour du centre
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + Math.PI / 4;
+        c.beginPath();
+        c.ellipse(x + Math.cos(a) * r * 0.42, y + Math.sin(a) * r * 0.42, r * 0.22, r * 0.1, a, 0, Math.PI * 2);
+        c.fill();
+      }
+    } else if (pattern === 'orbit') {
+      // anneau incliné avec une planète dessus
+      c.lineWidth = r * 0.08;
+      c.beginPath();
+      c.ellipse(x, y, r * 0.85, r * 0.3, -0.5, 0, Math.PI * 2);
+      c.stroke();
+      c.beginPath();
+      c.arc(x + Math.cos(-0.5) * r * 0.85, y + Math.sin(-0.5) * r * 0.85, r * 0.13, 0, Math.PI * 2);
+      c.fill();
+    } else if (pattern === 'dunes') {
+      // trois dunes ondulées
+      c.lineWidth = r * 0.09;
+      for (const k of [-0.35, 0, 0.35]) {
+        c.beginPath();
+        for (let i = 0; i <= 20; i++) {
+          const px = x - r + (i / 20) * 2 * r;
+          const py = y + k * r + Math.sin((i / 20) * Math.PI * 2 + k * 4) * r * 0.08;
+          if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+        }
+        c.stroke();
+      }
+    } else if (pattern === 'crystal') {
+      // facettes de cristal
+      for (let i = 0; i < 6; i++) {
+        const a1 = i * Math.PI / 3;
+        const a2 = (i + 1) * Math.PI / 3;
+        c.globalAlpha = i % 2 ? 0.22 : 0.42;
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x + Math.cos(a1) * r, y + Math.sin(a1) * r);
+        c.lineTo(x + Math.cos(a2) * r, y + Math.sin(a2) * r);
+        c.closePath();
+        c.fill();
+      }
+      c.globalAlpha = 1;
+    } else if (pattern === 'bolt') {
+      // éclair en zigzag
+      c.lineWidth = r * 0.12;
+      c.beginPath();
+      c.moveTo(x + r * 0.2, y - r * 0.9);
+      c.lineTo(x - r * 0.25, y - r * 0.05);
+      c.lineTo(x + r * 0.1, y - r * 0.05);
+      c.lineTo(x - r * 0.2, y + r * 0.9);
+      c.stroke();
+    } else if (pattern === 'sunburst') {
+      // rayons de soleil
+      c.lineWidth = r * 0.06;
+      for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI / 6;
+        c.beginPath();
+        c.moveTo(x + Math.cos(a) * r * 0.25, y + Math.sin(a) * r * 0.25);
+        c.lineTo(x + Math.cos(a) * r * 1.05, y + Math.sin(a) * r * 1.05);
+        c.stroke();
+      }
+    } else if (pattern === 'circuit') {
+      // circuit imprimé : lignes et rivets
+      c.lineWidth = r * 0.04;
+      c.beginPath();
+      for (const k of [-0.5, 0, 0.5]) {
+        c.moveTo(x + k * r, y - r);
+        c.lineTo(x + k * r, y + r);
+        c.moveTo(x - r, y + k * r);
+        c.lineTo(x + r, y + k * r);
+      }
+      c.stroke();
+      for (const kx of [-0.5, 0, 0.5]) {
+        for (const ky of [-0.5, 0, 0.5]) {
+          c.beginPath();
+          c.arc(x + kx * r, y + ky * r, r * 0.08, 0, Math.PI * 2);
+          c.fill();
+        }
+      }
+    }
+    c.restore();
+
+    // Contour néon
+    c.save();
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI * 2);
+    c.strokeStyle = item.stroke;
+    c.lineWidth = Math.max(2, r * 0.08);
+    c.shadowColor = neon;
+    c.shadowBlur = glow;
+    c.stroke();
+    c.restore();
+
+    // Flammes (brasier) qui sortent du haut du disque
+    if (pattern === 'flame') {
+      c.save();
+      c.shadowColor = neon;
+      c.shadowBlur = glow * 0.7;
+      c.fillStyle = item.stroke;
+      for (const dx of [-0.55, -0.2, 0.2, 0.55]) {
+        const bx = x + dx * r;
+        const by = y - r * 0.7;
+        const tip = 0.55 + 0.35 * Math.cos(dx * 3);
+        c.beginPath();
+        c.moveTo(bx - r * 0.2, by);
+        c.quadraticCurveTo(bx + r * 0.05, by - r * tip * 0.6, bx, by - r * tip);
+        c.quadraticCurveTo(bx - r * 0.05, by - r * tip * 0.6, bx + r * 0.2, by);
+        c.closePath();
+        c.fill();
+      }
+      c.restore();
+    }
+
+    // Couronne (légendaires, ou motif couronne)
+    if (pattern === 'crown' || item.rarity === 'legendaire') {
+      c.save();
+      c.shadowColor = neon;
+      c.shadowBlur = glow * 0.7;
+      c.fillStyle = item.stroke;
+      c.beginPath();
+      c.moveTo(x - r * 0.6, y - r * 0.5);
+      c.lineTo(x - r * 0.6, y - r * 1.0);
+      c.lineTo(x - r * 0.2, y - r * 0.7);
+      c.lineTo(x, y - r * 1.1);
+      c.lineTo(x + r * 0.2, y - r * 0.7);
+      c.lineTo(x + r * 0.6, y - r * 1.0);
+      c.lineTo(x + r * 0.6, y - r * 0.5);
+      c.closePath();
+      c.fill();
+      c.restore();
+    }
+  }
+
+  function draw(now) {
+    const camX = player.x - W / 2;
+    const camY = player.y - H / 2;
+    const skin = byId(SKINS, save.skin) || SKINS[0];
+
+    // Océan : dégradé de la surface vers les profondeurs
+    const sea = ctx.createLinearGradient(0, -camY, 0, WORLD - camY);
+    sea.addColorStop(0, '#0e7490');
+    sea.addColorStop(0.55, '#075985');
+    sea.addColorStop(1, '#082f49');
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, 0, W, H);
+
+    // Texture fixée à la carte : elle défile avec la caméra
+    if (!oceanPattern) oceanPattern = ctx.createPattern(oceanTex, 'repeat');
+    ctx.save();
+    ctx.translate(-camX, -camY);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = oceanPattern;
+    ctx.fillRect(camX, camY, W, H);
+    ctx.restore();
+
+    // Rayons de lumière qui descendent de la surface
+    ctx.save();
+    ctx.fillStyle = '#e0f2fe';
+    ctx.globalAlpha = 0.06;
+    for (let i = 0; i < 6; i++) {
+      const x0 = ((i * 310 + now * 0.01) % (W + 400)) - 200;
+      ctx.beginPath();
+      ctx.moveTo(x0, 0);
+      ctx.lineTo(x0 + 90, 0);
+      ctx.lineTo(x0 + 260, H);
+      ctx.lineTo(x0 + 170, H);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Bord du monde
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-camX, -camY, WORLD, WORLD);
+
+    // Courants : zones ovales où l'on est poussé, avec des traits qui glissent dans leur sens
+    for (const z of currents) {
+      const sx = z.x - camX, sy = z.y - camY;
+      if (sx + z.rx < 0 || sx - z.rx > W || sy + z.ry < 0 || sy - z.ry > H) continue;
+      ctx.save();
+      ctx.fillStyle = 'rgba(125, 211, 252, 0.08)';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, z.rx, z.ry, Math.atan2(z.dy, z.dx), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#bae6fd';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      for (let k = 0; k < 5; k++) {
+        const t = (now / 1800 + k / 5) % 1;
+        const off = (t * 2 - 1) * z.rx * 0.7;
+        const px = sx + z.dx * off, py = sy + z.dy * off;
+        ctx.globalAlpha = Math.sin(t * Math.PI) * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(px - z.dx * 16, py - z.dy * 16);
+        ctx.lineTo(px + z.dx * 16, py + z.dy * 16);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Algues qui ondulent
+    ctx.save();
+    ctx.strokeStyle = '#065f46';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    for (const s of seaweed) {
+      const sx = s.x - camX, sy = s.y - camY;
+      if (sx < -120 || sx > W + 120 || sy < -120 || sy > H + 120) continue;
+      ctx.beginPath();
+      for (let i = 0; i <= 4; i++) {
+        const px = sx + Math.sin(now / 700 + s.phase + i * 0.9) * 7 * (i / 4);
+        const py = sy - s.h * (i / 4);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Récifs : obstacles à contourner
+    for (const rk of rocks) {
+      const sx = rk.x - camX, sy = rk.y - camY;
+      if (sx + rk.r < 0 || sx - rk.r > W || sy + rk.r < 0 || sy - rk.r > H) continue;
+      ctx.fillStyle = '#1e3a4a';
+      ctx.beginPath();
+      ctx.arc(sx, sy, rk.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.15)';
+      ctx.beginPath();
+      ctx.arc(sx - rk.r * 0.3, sy - rk.r * 0.3, rk.r * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Bulles qui montent
+    ctx.save();
+    ctx.strokeStyle = 'rgba(224, 242, 254, 0.5)';
+    ctx.lineWidth = 1.5;
+    for (const b of bubbles) {
+      const by = (((b.y - now * b.speed / 1000) % WORLD) + WORLD) % WORLD;
+      const sx = b.x - camX, sy = by - camY;
+      if (sx < -10 || sx > W + 10 || sy < -10 || sy > H + 10) continue;
+      ctx.beginPath();
+      ctx.arc(sx + Math.sin(now / 500 + b.phase) * 3, sy, b.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Nourriture
+    for (const f of foods) {
+      ctx.fillStyle = f.color;
+      ctx.beginPath();
+      ctx.arc(f.x - camX, f.y - camY, f.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Ennemis : rouge = dangereux, vert = mangeable
+    for (const e of enemies) {
+      ctx.fillStyle = e.r > player.r * 1.1 ? '#ef4444' : '#22c55e';
+      ctx.beginPath();
+      ctx.arc(e.x - camX, e.y - camY, e.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Trainées qui suivent : historique de position pour la traînée
+    for (const f of followers) {
+      if (!f.hist) f.hist = [];
+      const lastP = f.hist[f.hist.length - 1];
+      if (!lastP || Math.hypot(f.x - lastP.x, f.y - lastP.y) >= 2.5) {
+        f.hist.push({ x: f.x, y: f.y });
+        if (f.hist.length > 30) f.hist.shift();
+      }
+    }
+    // Bandes : chaque trainée part de celle d'avant (le skin rond pour la première)
+    // La bande prend la couleur du skin choisi par le joueur ; le bord fin garde celle de la trainée
+    const bandW = Math.max(10, player.r * 0.9);
+    const bandColor = skin.pattern === 'aura' ? auraColor(now) : skin.color;
+    let leader = { x: W / 2, y: H / 2 };
+    for (const f of followers) {
+      const pts = [leader];
+      for (let j = f.hist.length - 1; j >= 0; j--) {
+        pts.push({ x: f.hist[j].x - camX, y: f.hist[j].y - camY });
+      }
+      paintBand(ctx, pts, bandColor, bandW, f.item.color, f.item.band);
+      paintBandFx(ctx, pts, bandW, f.item.color, f.item.rarity, now);
+      leader = { x: f.x - camX, y: f.y - camY };
+    }
+
+    // Joueur (toujours au centre de l'écran)
+    paintLook(W / 2, H / 2, player.r, skin, now);
+
+    if (state === 'play') {
+      const shieldText = shields > 0 ? `  ·  Bouclier : ${shields}` : '';
+      $('hud-text').textContent = `Score : ${score}  ·  Pièces en jeu : ${Math.floor(score / 2)}${shieldText}`;
+    }
+  }
+
+  // Mini-carte : toute la map, tes ennemis et toi
+  function drawMinimap() {
+    const k = MINI / WORLD;
+    mctx.fillStyle = '#0f172a';
+    mctx.fillRect(0, 0, MINI, MINI);
+
+    // Ennemis : rouge = dangereux, vert = mangeable
+    for (const e of enemies) {
+      mctx.fillStyle = e.r > player.r * 1.1 ? '#ef4444' : '#22c55e';
+      mctx.beginPath();
+      mctx.arc(e.x * k, e.y * k, 2, 0, Math.PI * 2);
+      mctx.fill();
+    }
+
+    // Toi, à la couleur de ton skin
+    const skin = byId(SKINS, save.skin) || SKINS[0];
+    mctx.fillStyle = skin.color;
+    mctx.strokeStyle = '#f8fafc';
+    mctx.lineWidth = 1.5;
+    mctx.beginPath();
+    mctx.arc(player.x * k, player.y * k, 4, 0, Math.PI * 2);
+    mctx.fill();
+    mctx.stroke();
+
+    // Bord de la map
+    mctx.strokeStyle = '#ef4444';
+    mctx.lineWidth = 2;
+    mctx.strokeRect(0, 0, MINI, MINI);
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (state === 'menu') idleCamera(now);
+    if (state === 'play') update(dt);
+    draw(now);
+    if (state === 'play' || state === 'countdown') drawMinimap();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Boutons ----------
+  $('btn-play').onclick = startRun;
+  $('btn-again').onclick = startRun;
+  $('btn-quit').onclick = quitRun;
+  $('btn-go-menu').onclick = () => { renderMenu(); show('menu'); };
+  $('btn-shop').onclick = () => { $('shop-msg').textContent = ''; renderShop(); show('shop'); };
+  $('btn-skins').onclick = () => { renderSkins(); show('skins'); };
+  $('btn-ranking').onclick = () => {
+    $('rank-msg').textContent = '';
+    updateRankPanel();
+    show('ranking');
+    if (save.pseudo) startRankTimer();
+  };
+  $('rank-save').onclick = savePseudo;
+  $('rank-pseudo').oninput = () => { if (pseudoArmed) setPseudoArmed(false); };
+  $('rank-pseudo').onkeydown = (e) => { if (e.key === 'Enter') savePseudo(); };
+  $('rank-back').onclick = () => { stopRankTimer(); renderMenu(); show('menu'); };
+  $('btn-settings').onclick = () => { syncSettings(); show('settings'); };
+  $('vol-sfx').oninput = (e) => setVolume('sfx', e.target.value);
+  $('vol-music').oninput = (e) => setVolume('music', e.target.value);
+  $('vol-sfx').onchange = () => playSfx('ui');
+  $('detail-equip').onclick = detailEquip;
+  $('detail-up').onclick = detailUpgrade;
+  $('detail-back').onclick = backFromDetail;
+  $('detail-look').width = 120 * (window.devicePixelRatio || 1);
+  $('detail-look').height = $('detail-look').width;
+  $('level-box').onclick = () => { renderLevels(); show('levels'); };
+  $('btn-trainees').onclick = () => { $('trainees-msg').textContent = ''; renderTrainees(); show('trainees'); };
+  $('btn-daily').onclick = () => { $('daily-msg').textContent = ''; renderDaily(); show('daily'); };
+  $('buy-skin').onclick = () => buyBox('skin');
+  $('buy-trainee').onclick = () => buyBox('trainee');
+  $('btn-claim').onclick = claimDaily;
+  document.querySelectorAll('[data-back]').forEach((b) => {
+    b.onclick = () => { renderMenu(); show('menu'); };
+  });
+
+  restart();
+  renderMenu();
+  show('menu');
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
