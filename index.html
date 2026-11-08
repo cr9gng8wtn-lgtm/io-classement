@@ -133,6 +133,11 @@
     .rank-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 42vh; overflow-y: auto; }
     .rank-list li { display: grid; grid-template-columns: 2.4em minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: #1e293b; color: #f8fafc; text-align: left; font-variant-numeric: tabular-nums; }
     .rank-list li.me { outline: 2px solid #facc15; }
+    .rank-list li.top1 { background: #facc15; color: #0f172a; }
+    .rank-list li.top2 { background: #cbd5e1; color: #0f172a; }
+    .rank-list li.top3 { background: #d97706; color: #0f172a; }
+    .rank-list li.top1 .pos, .rank-list li.top2 .pos, .rank-list li.top3 .pos { color: #0f172a; font-weight: 800; }
+    .rank-list li.top1 .lv, .rank-list li.top2 .lv, .rank-list li.top3 .lv { color: #0f172a; }
     .rank-list .pos { color: #94a3b8; }
     .rank-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .rank-list .lv { color: #22d3ee; font-weight: 700; }
@@ -871,6 +876,7 @@
     rows.forEach((r, i) => {
       const li = document.createElement('li');
       if (r.user_id === myUid()) li.className = 'me';
+      if (i < 3) li.classList.add(['top1', 'top2', 'top3'][i]);
       const pos = document.createElement('span');
       pos.className = 'pos';
       pos.textContent = `${i + 1}.`;
