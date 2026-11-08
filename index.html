@@ -763,6 +763,7 @@
   const RANK_EVERY = 5000; // rafraîchissement en direct, en ms
   let rankTimer = null;
   let rankBusy = false;
+  let pushMsg = ''; // dernier message d'envoi du score (erreur à afficher)
 
   // Identifiant anonyme du joueur (aucune donnée personnelle)
   function newPlayerId() {
@@ -878,14 +879,15 @@
       name.textContent = r.pseudo;
       const lv = document.createElement('span');
       lv.className = 'lv';
-      lv.textContent = `Niv. ${r.level}`;
+      lv.textContent = `${r.xp} pts · niv. ${r.level}`;
       li.append(pos, name, lv);
       ol.appendChild(li);
     });
   }
   function updateRankMe() {
+    const pts = save.week && save.week.key === weekKey() ? save.week.xp : 0;
     $('rank-me').textContent = save.pseudo
-      ? `${save.pseudo} · niveau ${levelInfo().level}`
+      ? `${save.pseudo} · ${pts} pts cette semaine`
       : 'Choisis un pseudo pour apparaître dans le classement.';
   }
   async function refreshRanking() {
@@ -899,7 +901,15 @@
     try {
       const rows = await fetchRanking();
       renderRankList(rows);
-      status.innerHTML = '<span class="live-dot"></span> En direct · ' + new Date().toLocaleTimeString('fr-FR');
+      status.textContent = '';
+      if (pushMsg) {
+        const w = document.createElement('span');
+        w.textContent = pushMsg;
+        status.append(w, document.createElement('br'));
+      }
+      const live = document.createElement('span');
+      live.className = 'live-dot';
+      status.append(live, document.createTextNode(' En direct · ' + new Date().toLocaleTimeString('fr-FR')));
     } catch (e) {
       status.textContent = 'Erreur : ' + e.message;
     } finally {
@@ -3506,7 +3516,7 @@
       save.dailyPlay.best = Math.max(save.dailyPlay.best, score);
     }
     persist();
-    if (save.pseudo) pushScore().catch(() => {});
+    if (save.pseudo) pushScore().then(() => { pushMsg = ''; }).catch((e) => { pushMsg = 'Envoi du score échoué : ' + e.message; });
     return { earned, gems, bonus };
   }
 
