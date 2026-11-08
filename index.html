@@ -99,6 +99,8 @@
     @keyframes giftRays { 0% { transform: scale(.3); opacity: 0; } 40% { opacity: 1; } 100% { transform: scale(1.25); opacity: 0; } }
     @keyframes giftExit { 0% { transform: translate(0, 0) rotate(14deg) scale(1); opacity: 1; } 100% { transform: translate(60vw, -70vh) rotate(194deg) scale(.3); opacity: 0; } }
     body.gift-blur canvas { filter: blur(7px) brightness(.45); }
+    #stick { position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .07); pointer-events: none; display: none; z-index: 20; }
+    #stick .knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(250, 204, 21, .75); }
     body.gift-blur .panel:not(.hidden) { filter: blur(6px); transition: filter .3s; }
     /* Fond de carte selon la rareté (après les styles de base) */
     .r-commun { background: #6b7280; }
@@ -155,6 +157,7 @@
 
 <canvas id="mini" class="hidden"></canvas>
 <div id="countdown" class="hidden"></div>
+<div id="stick"><div class="knob"></div></div>
 
 <div id="menu" class="panel">
   <div id="level-box" class="menu-box">
@@ -3305,8 +3308,39 @@
 
   // Position du pointeur (souris ou doigt), en coordonnées écran
   const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-  canvas.addEventListener('pointermove', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; });
-  canvas.addEventListener('pointerdown', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; });
+  // Tactile : joystick. Le doigt pose le point de départ, la direction vient du déplacement,
+  // et le joueur s'arrête quand on lâche. La souris garde son comportement.
+  const touch = { on: false, kind: 'mouse', ox: 0, oy: 0, x: 0, y: 0 };
+  const stick = $('stick');
+  const knob = stick.querySelector('.knob');
+  function moveKnob() {
+    const kx = Math.max(-50, Math.min(50, touch.x - touch.ox));
+    const ky = Math.max(-50, Math.min(50, touch.y - touch.oy));
+    knob.style.transform = `translate(${kx}px, ${ky}px)`;
+  }
+  function endTouch() {
+    touch.on = false;
+    stick.style.display = 'none';
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    pointer.x = e.clientX; pointer.y = e.clientY;
+    touch.kind = e.pointerType;
+    if (e.pointerType === 'touch') {
+      touch.on = true;
+      touch.ox = touch.x = e.clientX;
+      touch.oy = touch.y = e.clientY;
+      stick.style.left = touch.ox + 'px';
+      stick.style.top = touch.oy + 'px';
+      stick.style.display = 'block';
+      moveKnob();
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    pointer.x = e.clientX; pointer.y = e.clientY;
+    if (touch.on && e.pointerType === 'touch') { touch.x = e.clientX; touch.y = e.clientY; moveKnob(); }
+  });
+  canvas.addEventListener('pointerup', endTouch);
+  canvas.addEventListener('pointercancel', endTouch);
 
   let player, foods, enemies, followers;
   let rocks = [], currents = [], decor = [], bubbles = [];
@@ -3569,11 +3603,21 @@
 
   function update(dt) {
     // Le joueur avance vers le pointeur à vitesse constante
-    const dx = pointer.x - W / 2;
-    const dy = pointer.y - H / 2;
+    let dx, dy, speedK = 1;
+    if (touch.on) {
+      // joystick : plus on écarte le doigt, plus on va vite (pleine vitesse à 70 px)
+      dx = touch.x - touch.ox;
+      dy = touch.y - touch.oy;
+      speedK = Math.min(1, Math.hypot(dx, dy) / 70);
+    } else if (touch.kind === 'touch') {
+      dx = 0; dy = 0; // doigt levé : on s'arrête
+    } else {
+      dx = pointer.x - W / 2;
+      dy = pointer.y - H / 2;
+    }
     const d = Math.hypot(dx, dy);
     if (d > 4) {
-      const step = Math.min(d, PLAYER_SPEED * dt);
+      const step = Math.min(d, PLAYER_SPEED * dt * speedK);
       player.x = clamp(player.x + (dx / d) * step, 0, WORLD);
       player.y = clamp(player.y + (dy / d) * step, 0, WORLD);
     }
