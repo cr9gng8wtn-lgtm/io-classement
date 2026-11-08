@@ -3310,7 +3310,7 @@
   const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   // Tactile : joystick. Le doigt pose le point de départ, la direction vient du déplacement,
   // et le joueur s'arrête quand on lâche. La souris garde son comportement.
-  const touch = { on: false, kind: 'mouse', ox: 0, oy: 0, x: 0, y: 0 };
+  const touch = { on: false, kind: 'mouse', ox: 0, oy: 0, x: 0, y: 0, coast: null };
   const stick = $('stick');
   const knob = stick.querySelector('.knob');
   function moveKnob() {
@@ -3319,6 +3319,12 @@
     knob.style.transform = `translate(${kx}px, ${ky}px)`;
   }
   function endTouch() {
+    // Au relâché, le joueur continue dans la direction du dernier glissement
+    if (touch.on) {
+      const dx = touch.x - touch.ox, dy = touch.y - touch.oy;
+      const d = Math.hypot(dx, dy);
+      touch.coast = d > 10 ? { dx, dy, k: Math.max(0.6, Math.min(1, d / 70)) } : null;
+    }
     touch.on = false;
     stick.style.display = 'none';
   }
@@ -3327,6 +3333,7 @@
     touch.kind = e.pointerType;
     if (e.pointerType === 'touch') {
       touch.on = true;
+      touch.coast = null; // un nouveau toucher arrête l'élan
       touch.ox = touch.x = e.clientX;
       touch.oy = touch.y = e.clientY;
       stick.style.left = touch.ox + 'px';
@@ -3610,7 +3617,12 @@
       dy = touch.y - touch.oy;
       speedK = Math.min(1, Math.hypot(dx, dy) / 70);
     } else if (touch.kind === 'touch') {
-      dx = 0; dy = 0; // doigt levé : on s'arrête
+      if (touch.coast) {
+        // doigt levé : le joueur continue tout seul dans la même direction
+        dx = touch.coast.dx; dy = touch.coast.dy; speedK = touch.coast.k;
+      } else {
+        dx = 0; dy = 0;
+      }
     } else {
       dx = pointer.x - W / 2;
       dy = pointer.y - H / 2;
