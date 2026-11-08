@@ -3310,7 +3310,7 @@
   const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   // Tactile : joystick. Le doigt pose le point de départ, la direction vient du déplacement,
   // et le joueur s'arrête quand on lâche. La souris garde son comportement.
-  const touch = { on: false, kind: 'mouse', ox: 0, oy: 0, x: 0, y: 0, coast: null };
+  const touch = { on: false, kind: 'mouse', ox: 0, oy: 0, x: 0, y: 0, dir: null };
   const stick = $('stick');
   const knob = stick.querySelector('.knob');
   function moveKnob() {
@@ -3319,12 +3319,7 @@
     knob.style.transform = `translate(${kx}px, ${ky}px)`;
   }
   function endTouch() {
-    // Au relâché, le joueur continue dans la direction du dernier glissement
-    if (touch.on) {
-      const dx = touch.x - touch.ox, dy = touch.y - touch.oy;
-      const d = Math.hypot(dx, dy);
-      touch.coast = d > 10 ? { dx, dy, k: Math.max(0.6, Math.min(1, d / 70)) } : null;
-    }
+    // Le joueur garde sa direction : il ne s'arrête jamais
     touch.on = false;
     stick.style.display = 'none';
   }
@@ -3333,7 +3328,6 @@
     touch.kind = e.pointerType;
     if (e.pointerType === 'touch') {
       touch.on = true;
-      touch.coast = null; // un nouveau toucher arrête l'élan
       touch.ox = touch.x = e.clientX;
       touch.oy = touch.y = e.clientY;
       stick.style.left = touch.ox + 'px';
@@ -3344,7 +3338,13 @@
   });
   canvas.addEventListener('pointermove', (e) => {
     pointer.x = e.clientX; pointer.y = e.clientY;
-    if (touch.on && e.pointerType === 'touch') { touch.x = e.clientX; touch.y = e.clientY; moveKnob(); }
+    if (touch.on && e.pointerType === 'touch') {
+      touch.x = e.clientX; touch.y = e.clientY;
+      // le doigt écarté du centre change la direction ; près du centre, on garde l'ancienne
+      const ddx = touch.x - touch.ox, ddy = touch.y - touch.oy;
+      if (Math.hypot(ddx, ddy) > 10) touch.dir = { dx: ddx, dy: ddy };
+      moveKnob();
+    }
   });
   canvas.addEventListener('pointerup', endTouch);
   canvas.addEventListener('pointercancel', endTouch);
@@ -3611,18 +3611,12 @@
   function update(dt) {
     // Le joueur avance vers le pointeur à vitesse constante
     let dx, dy, speedK = 1;
-    if (touch.on) {
-      // joystick : plus on écarte le doigt, plus on va vite (pleine vitesse à 70 px)
-      dx = touch.x - touch.ox;
-      dy = touch.y - touch.oy;
-      speedK = Math.min(1, Math.hypot(dx, dy) / 70);
-    } else if (touch.kind === 'touch') {
-      if (touch.coast) {
-        // doigt levé : le joueur continue tout seul dans la même direction
-        dx = touch.coast.dx; dy = touch.coast.dy; speedK = touch.coast.k;
-      } else {
-        dx = 0; dy = 0;
-      }
+    if (touch.kind === 'touch') {
+      // tactile : le joueur avance toujours dans la dernière direction choisie, sans jamais s'arrêter
+      dx = 0; dy = 0;
+      if (touch.dir) { dx = touch.dir.dx; dy = touch.dir.dy; }
+      const cur = touch.on ? Math.hypot(touch.x - touch.ox, touch.y - touch.oy) : 70;
+      speedK = Math.max(0.6, Math.min(1, cur / 70));
     } else {
       dx = pointer.x - W / 2;
       dy = pointer.y - H / 2;
