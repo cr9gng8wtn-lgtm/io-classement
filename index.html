@@ -980,13 +980,33 @@
       msg.textContent = `« ${v} » sera ton pseudo pour toujours. Appuie encore pour confirmer.`;
       return;
     }
-    save.pseudo = v;
-    persist();
-    updateRankPanel();
-    // D'abord on envoie le pseudo, puis on affiche le classement (pour que le joueur y figure déjà)
-    pushScore()
-      .then(startRankTimer)
-      .catch((e) => { $('rank-status').textContent = 'Envoi impossible : ' + e.message; });
+    msg.textContent = 'Vérification du pseudo…';
+    // D'abord le pseudo est réservé sur le serveur (il ne peut pas être pris par quelqu'un d'autre)
+    claimPseudo(v)
+      .then(() => {
+        save.pseudo = v;
+        persist();
+        updateRankPanel();
+        // puis on envoie le score, et on affiche le classement (pour que le joueur y figure déjà)
+        return pushScore().then(startRankTimer).catch((e) => { $('rank-status').textContent = 'Envoi impossible : ' + e.message; });
+      })
+      .catch((e) => {
+        setPseudoArmed(false);
+        msg.textContent = e.message;
+      });
+  }
+  // Réserve le pseudo pour ce compte. Un pseudo déjà pris (sans tenir compte des majuscules) est refusé.
+  async function claimPseudo(v) {
+    let a = await authSession(false);
+    const send = () => fetch(`${RANK.url}/rest/v1/pseudos`, {
+      method: 'POST',
+      headers: rankHeaders({ Authorization: `Bearer ${a.token}`, Prefer: 'return=minimal' }),
+      body: JSON.stringify({ user_id: a.uid, pseudo: v })
+    });
+    let r = await send();
+    if (r.status === 401) { a = await authSession(true); r = await send(); }
+    if (r.status === 409) throw new Error('Ce pseudo est déjà pris, choisis-en un autre.');
+    if (!r.ok) throw new Error(await rankError(r));
   }
 
   // Niveau d'amélioration d'un skin ou d'une trainée (0 à 5)
